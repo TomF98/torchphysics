@@ -6,7 +6,6 @@ import abc
 import torch
 import numpy as np
 
-from . import datacreator as dc
 from ..utils import (normal_derivative,
                      prepare_user_fun_input,
                      apply_to_batch,
@@ -24,12 +23,14 @@ class Condition(torch.nn.Module):
     Parameters
     ----------
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     norm : torch.nn.Module
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used for the computation of the conditioning loss/metric.
-    weight : float
+    point_sampler: DataSampler
+        A sampler that creates the training/validation points for this condition.
+    weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
     track_gradients : bool or list of str or list of DiffVariables
@@ -44,17 +45,18 @@ class Condition(torch.nn.Module):
         If False, no plots are created. If True, behaviour is defined in each condition.
     """
 
-    def __init__(self, name, norm, weight=1.0,
+    def __init__(self, name, norm, point_sampler, weight=1.0,
                  track_gradients=True,
                  data_plot_variables=True):
         super().__init__()
         self.name = name
         self.norm = norm
         self.weight = weight
+        self.point_sampler = point_sampler
         self.track_gradients = track_gradients
         self.data_plot_variables = data_plot_variables
 
-        # variables are registered when the condition is added to a problem or variable
+        # variables are registered when the condition is added to a setting
         self.setting = None
 
     @abc.abstractmethod
@@ -65,9 +67,6 @@ class Condition(torch.nn.Module):
     @abc.abstractmethod
     def get_data_plot_variables(self):
         return
-
-    def is_registered(self):
-        return self.setting is not None
 
     def serialize(self):
         dct = {}
@@ -92,29 +91,20 @@ class DiffEqCondition(Condition):
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used to compute the loss for the deviation of the model from a PDE.
+    point_sampler: DataSampler
+        A sampler that creates the training/validation points for this condition.
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     data_fun : function handle, optional
         A method that represents the possible right-hand side of the differential 
-        equation.
+        equation. Since it is more efficent to comput the function only
+        once, if it is independetn of the model. 
         If the right-hand side dependents on the model outputs, or is zero, this
         parameter should be None and the whole condition has to be implemented in
-        bound_condition_fun!
-        If independent of the model, it is more efficent to comput the function only
-        once. 
-    sampling_strategy : str, optional
-        The sampling strategy used to sample data points for this condition. See domains
-        for more details.
+        the pde!
     weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
-    dataset_size : int, list, tuple or dic
-        Amount of samples in the used dataset. The dataset is generated once at the
-        beginning of the training.
-        If an int is given, the methode will use at least as many data points as the
-        number. The number of desired points can also be uniquely picked for each
-        variable, if a list, tuple or dic is given as an input. Then the whole number
-        of data points will be the product of the given numbers.
     track_gradients : bool, optional
         If True, the gradients are still tracked during validation to enable the
         computation of derivatives w.r.t. the inputs.
@@ -126,24 +116,19 @@ class DiffEqCondition(Condition):
         If False, no plots are created. If True, behaviour is defined in each condition.
     """
 
-    def __init__(self, pde, norm, name='pde', data_fun=None,
-                 sampling_strategy='random', weight=1.0,
-                 dataset_size=10000, track_gradients=True,
-                 data_fun_whole_batch=True,
+    def __init__(self, pde, norm, point_sampler, 
+                 name='pde', data_fun=None, weight=1.0,
+                 track_gradients=True, data_fun_whole_batch=True,
                  data_plot_variables=False):
-        super().__init__(name, norm, weight,
+        super().__init__(name, norm, weight, point_sampler=point_sampler, 
                          track_gradients=track_gradients,
                          data_plot_variables=data_plot_variables)
         self.pde = pde
         self.data_fun = data_fun
         self.data_fun_whole_batch = data_fun_whole_batch
-        self.dataset_len = get_data_len(dataset_size)
-        self.datacreator = dc.InnerDataCreator(variables=None,
-                                               dataset_size=dataset_size,
-                                               sampling_strategy=sampling_strategy)
 
     def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.variables})
+        u = model({v: data[v] for v in self.setting.domain.space})
         inp = prepare_user_fun_input(self.pde,
                                      {**u,
                                       **data,
@@ -152,37 +137,25 @@ class DiffEqCondition(Condition):
         return self.norm(err, torch.zeros_like(err))
 
     def get_data(self):
-        if self.is_registered():
-            self.datacreator.variables = self.setting.variables
-            inp_data = self.datacreator.get_data()
-            if self.data_fun is None:
-                return inp_data
-            else:
-                inp_data, data = apply_data_fun(self.data_fun,
-                                                inp_data,
-                                                whole_batch=self.data_fun_whole_batch,
-                                                batch_size=self.dataset_len)
-                return {**inp_data,
-                        'data': data}
+        inp_data = self.point_sampler.sample_points()
+        if self.data_fun is None:
+            return inp_data
         else:
-            raise RuntimeError("""Conditions need to be registered in a
-                                  Variable or Problem.""")
-
-    def serialize(self):
-        dct = super().serialize()
-        dct['sampling_strategy'] = self.datacreator.sampling_strategy
-        dct['pde'] = self.pde.__name__
-        dct['dataset_size'] = self.datacreator.dataset_size
-        return dct
+            inp_data, data = apply_data_fun(self.data_fun,
+                                            inp_data,
+                                            whole_batch=self.data_fun_whole_batch,
+                                            batch_size=len(self.point_sampler))
+            return {**inp_data,
+                    'data': data}
 
     def get_data_plot_variables(self):
         if self.data_plot_variables is True:
-            return self.setting.variables
+            return self.setting.domain.space
         elif self.data_plot_variables is False:
             return None
         else:
             return self.data_plot_variables
-
+        
 
 class DataCondition(Condition):
     """
@@ -196,22 +169,22 @@ class DataCondition(Condition):
     data_out : array-like
         The targeted solution values for the data points in data_inp.
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     norm : torch.nn.Module
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used to compute the loss for the deviation of the model from the
         given data.
-    solution_name : str
+    solution_name : str, optional
         The output function which should be fitted to the given dataset.
-    weight : float
+    weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
     """
 
-    def __init__(self, data_inp, data_out, name, norm, solution_name='u',
-                 weight=1.0):
-        super().__init__(name, norm, weight,
+    def __init__(self, data_inp, data_out, name, norm,
+                 solution_name='u', weight=1.0):
+        super().__init__(name, norm, weight, point_sampler=None,
                          track_gradients=False,
                          data_plot_variables=False)
         self.solution_name = solution_name
@@ -219,22 +192,88 @@ class DataCondition(Condition):
         self.data_u = data_out
 
     def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.variables})
+        u = model({v: data[v] for v in self.setting.domain.space})
         return self.norm(u[self.solution_name], data['target'])
 
     def get_data(self):
-        if self.is_registered():
-            return {**self.data_x,
-                    'target': self.data_u}
-        else:
-            raise RuntimeError("""Conditions need to be registered in a
-                                  Variable or Problem.""")
-
-    def serialize(self):
-        return super().serialize()
+        return {**self.data_x,
+                'target': self.data_u}
 
     def get_data_plot_variables(self):
         return None
+
+
+class RestrictionCondition(Condition):
+    """A condition to limit the solution/parameter values to specific range.
+    E.g. solution > 0 or Parameter D in [2, 6].
+    
+    Parameters
+    ----------
+    restriction_fun: function handle
+        A method that takes the output and input of a model and returns the desiered 
+        restriction. If the restriction is fullfilled the function has to return 0.
+        E.g. the Parameter D should be bigger 1:
+        |   restriction_fun(D):
+        |       return torch.min(torch.tensor([0, D-1]))
+    norm : torch.nn.Module
+        A Pytorch module which forward pass returns the scalar norm of the difference of
+        two input tensors, and is therefore similar to the implementation of nn.MSELoss.
+        The norm is used to compute the loss of this restriction.
+    point_sampler: DataSampler, optional
+        A sampler that creates the training/validation points for this condition.
+    name : str
+        name of this condition (should be unique per condition)
+    weight : float, optional
+        Scalar weight of this condition that is used in the weighted sum for the
+        training loss. Defaults to 1.
+    boundary_domain : Domain
+        If the restriction is connected to the normal vector of a domain, the 
+        boundary has to be given as an input. (So the normals can be computed) 
+        The input for the normal vector in the restriction function will be
+        'normal'.
+    track_gradients : bool, optional
+        If True, the gradients are still tracked during validation to enable the
+        computation of derivatives w.r.t. the inputs.
+    data_plot_variables : bool or tuple, optional
+        The variables which are used to log the used training data in a scatter plot.
+        If False, no plots are created. If True, behaviour is defined in each condition.
+    """
+
+    def __init__(self, restriction_fun, norm, point_sampler=None,
+                 name='restriction', weight=1.0, boundary_domain=None,
+                 track_gradients=False, data_plot_variables=False):
+        super().__init__(name, norm, weight, point_sampler=point_sampler, 
+                         track_gradients=track_gradients,
+                         data_plot_variables=data_plot_variables)
+        self.restriction_fun = restriction_fun
+        self.boundary_domain = boundary_domain
+
+    def forward(self, model, data):
+        data_dic = {**self.setting.parameters}
+        if self.point_sampler is not None:
+            u = model({v: data[v] for v in self.setting.domain.space})
+            data_dic = {**u, **data, **self.setting.parameters}
+        inp = prepare_user_fun_input(self.restriction_fun, data_dic)
+        err = self.restriction_fun(**inp)
+        return self.norm(err, torch.zeros_like(err))
+
+    def get_data(self):
+        out = {}
+        if self.point_sampler is not None:
+            inp_data = self.point_sampler.sample_points()
+            out = {**inp_data}
+            if self.boundary_domain is not None:
+                normals = self.boundary_domain.normals(inp_data)
+                out['normal'] = normals
+        return out
+
+    def get_data_plot_variables(self):
+        if self.data_plot_variables is True:
+            return self.setting.domain.space
+        elif self.data_plot_variables is False:
+            return None
+        else:
+            return self.data_plot_variables
 
 
 class BoundaryCondition(Condition):
@@ -244,43 +283,45 @@ class BoundaryCondition(Condition):
     Parameters
     ----------
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     norm : torch.nn.Module
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used to compute the loss for the deviation of the model from the
         given data.
+    point_sampler: DataSampler
+        A sampler that creates the training/validation points for this condition.
     track_gradients : bool
         If True, the gradients are still tracked during validation to enable the
         computation of derivatives w.r.t. the inputs.
-    weight : float
+    weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
-    data_plot_variables : bool or tuple
+    data_plot_variables : bool or tuple, optional
         The variables which are used to log the used training data in a scatter plot.
         If False, no plots are created. If True, behaviour is defined in each condition.
     """
 
-    def __init__(self, name, norm, track_gradients, weight=1.0,
-                 data_plot_variables=True):
+    def __init__(self, name, norm, point_sampler, boundary_domain, 
+                 track_gradients, weight=1.0, data_plot_variables=True):
         super().__init__(name, norm, weight=weight,
+                         point_sampler=point_sampler,
                          track_gradients=track_gradients,
                          data_plot_variables=data_plot_variables)
-        # boundary_variable is registered when the condition is added to that variable
-        self.boundary_variable = None  # string
-
-    def serialize(self):
-        dct = super().serialize()
-        dct['boundary_variable'] = self.boundary_variable
-        return dct
+        self.boundary_domain = boundary_domain
 
     def get_data_plot_variables(self):
         if self.data_plot_variables is True:
-            return self.boundary_variable
+            return self.boundary_domain
         elif self.data_plot_variables is False:
             return None
         else:
             return self.data_plot_variables
+
+    def serialize(self):
+        dct = super().serialize()
+        dct['boundary_domain'] = self.boundary_domain
+        return dct
 
 
 class DirichletCondition(BoundaryCondition):
@@ -293,81 +334,53 @@ class DirichletCondition(BoundaryCondition):
         A method that takes boundary points (in the usual dictionary form) as an input
         and returns the desired boundary values at those points.
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     norm : torch.nn.Module
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used to compute the loss for the deviation of the model from the
         given data.
-    solution_name : str
+    point_sampler: DataSampler
+        A sampler that creates the training/validation points for this condition.
+    solution_name : str, optional
         The output function for which the given boundary condition should be learned.
     data_fun_whole_batch : bool, optional
         Specifies if the dirichlet_fun can work with a whole batch of data (then True),
         or every sample point has to be evaluated alone (False). 
-    sampling_strategy : str
-        The sampling strategy used to sample data points for this condition. See domains
-        for more details.
-    boundary_sampling_strategy : str
-        The sampling strategy used to sample the boundary variable's points for this
-        condition. See domains for more details.
-    weight : float
+    weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
-    dataset_size : int, list, tuple or dic
-        Amount of samples in the used dataset. The dataset is generated once at the
-        beginning of the training.
-        If an int is given, the methode will use at least as many data points as the
-        number. The number of desired points can also be uniquely picked for each
-        variable, if a list, tuple or dic is given as an input. Then the whole number
-        of data points will be the product of the given numbers.
-    data_plot_variables : bool or tuple
+    data_plot_variables : bool or tuple, optional
         The variables which are used to log the used training data in a scatter plot.
         If False, no plots are created. If True, behaviour is defined in each condition.
     """
 
-    def __init__(self, dirichlet_fun, name, norm, solution_name='u', whole_batch=True,
-                 sampling_strategy='random', boundary_sampling_strategy='random',
-                 weight=1.0, dataset_size=10000,
-                 data_plot_variables=True):
-        super().__init__(name, norm, weight=weight,
-                         track_gradients=False,
+    def __init__(self, dirichlet_fun, name, norm, point_sampler,
+                 solution_name='u', whole_batch=True,
+                 weight=1.0, data_plot_variables=True):
+        super().__init__(name, norm, weight=weight, point_sampler=point_sampler,
+                         track_gradients=False, boundary_domain=None,
                          data_plot_variables=data_plot_variables)
         self.solution_name = solution_name
-
         self.dirichlet_fun = dirichlet_fun
         self.whole_batch = whole_batch
-        self.dataset_size = dataset_size
-        self.dataset_len = get_data_len(dataset_size)
-        self.datacreator = dc.BoundaryDataCreator(variables=None,
-                                                  dataset_size=dataset_size,
-                                                  sampling_strategy=sampling_strategy,
-                                                  boundary_sampling_strategy=boundary_sampling_strategy)
 
     def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.variables})
+        u = model({v: data[v] for v in self.setting.domain.space})
         return self.norm(u[self.solution_name], data['target'])
 
     def get_data(self):
-        if self.is_registered():
-            self.datacreator.variables = self.setting.variables
-            self.datacreator.boundary_variable = self.boundary_variable
-            inp_data = self.datacreator.get_data()
-            inp_data, target = apply_data_fun(self.dirichlet_fun,
-                                              inp_data,
-                                              whole_batch=self.whole_batch,
-                                              batch_size=self.dataset_len)
-            return {**inp_data,
-                    'target': target}
-        else:
-            raise RuntimeError("""Conditions need to be registered in a
-                                  Variable or Problem.""")
+        inp_data = self.point_sampler.sample_points()
+        inp_data, target = apply_data_fun(self.dirichlet_fun,
+                                          inp_data,
+                                          whole_batch=self.whole_batch,
+                                          batch_size=len(self.point_sampler))
+        return {**inp_data,
+                'target': target}
 
     def serialize(self):
         dct = super().serialize()
         dct['dirichlet_fun'] = self.dirichlet_fun.__name__
-        dct['dataset_size'] = self.datacreator.dataset_size
-        dct['sampling_strategy'] = self.datacreator.sampling_strategy
-        dct['boundary_sampling_strategy'] = self.datacreator.boundary_sampling_strategy
         return dct
 
 
@@ -381,86 +394,58 @@ class NeumannCondition(BoundaryCondition):
         A method that takes boundary points (in the usual dictionary form) as an input
         and returns the desired values of the normal derivatives of the model.
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     norm : torch.nn.Module
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used to compute the loss for the deviation of the model from the
         given data.
-    solution_name : str
+    point_sampler: DataSampler
+        A sampler that creates the training/validation points for this condition.
+    solution_name : str, optional
         The output function for which the given boundary condition should be learned.
     data_fun_whole_batch : bool, optional
         Specifies if the neumann_fun can work with a whole batch of data (then True),
         or every sample point has to be evaluated alone (False). 
-    sampling_strategy : str
-        The sampling strategy used to sample data points for this condition. See domains
-        for more details.
-    boundary_sampling_strategy : str
-        The sampling strategy used to sample the boundary variable's points for this
-        condition. See domains for more details.
-    weight : float
+    weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
-    dataset_size : int, list, tuple or dic
-        Amount of samples in the used dataset. The dataset is generated once at the
-        beginning of the training.
-        If an int is given, the methode will use at least as many data points as the
-        number. The number of desired points can also be uniquely picked for each
-        variable, if a list, tuple or dic is given as an input. Then the whole number
-        of data points will be the product of the given numbers.
-    data_plot_variables : bool or tuple
+    data_plot_variables : bool or tuple, optional
         The variables which are used to log the used training data in a scatter plot.
         If False, no plots are created. If True, behaviour is defined in each condition.
     """
 
-    def __init__(self, neumann_fun, name, norm, solution_name='u', whole_batch=True,
-                 sampling_strategy='random', boundary_sampling_strategy='random',
-                 weight=1.0, dataset_size=10000,
-                 data_plot_variables=True):
-        super().__init__(name, norm, weight=weight,
-                         track_gradients=True,
+    def __init__(self, neumann_fun, name, norm, point_sampler, boundary_domain,
+                 solution_name='u', whole_batch=True,
+                 weight=1.0, data_plot_variables=True):
+        super().__init__(name, norm, weight=weight, point_sampler=point_sampler,
+                         track_gradients=False, boundary_domain=boundary_domain,
                          data_plot_variables=data_plot_variables)
         self.solution_name = solution_name
-
         self.neumann_fun = neumann_fun
         self.whole_batch = whole_batch
-        self.dataset_size = dataset_size
-        self.dataset_len = get_data_len(dataset_size)
-        self.datacreator = dc.BoundaryDataCreator(variables=None,
-                                                  dataset_size=dataset_size,
-                                                  sampling_strategy=sampling_strategy,
-                                                  boundary_sampling_strategy=boundary_sampling_strategy)
 
     def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.variables})
-        normal_derivatives = normal_derivative(u[self.solution_name], data[self.boundary_variable],
+        u = model({v: data[v] for v in self.setting.domain.space})
+        normal_derivatives = normal_derivative(u[self.solution_name],
+                                               data[self.boundary_domain],
                                                data['normal'])
         return self.norm(normal_derivatives, data['target'])
 
     def get_data(self):
-        if self.is_registered():
-            self.datacreator.variables = self.setting.variables
-            self.datacreator.boundary_variable = self.boundary_variable
-            inp_data = self.datacreator.get_data()
-            normals = self.setting.variables[self.boundary_variable] \
-                .domain.boundary_normal(inp_data[self.boundary_variable])
-            inp_data, target = apply_data_fun(self.neumann_fun,
-                                              inp_data,
-                                              whole_batch=self.whole_batch,
-                                              batch_size=self.dataset_len)
-            return {**inp_data,
-                    'target': target,
-                    'normal': normals}
-        else:
-            raise RuntimeError("""Conditions need to be registered in a
-                                  Variable or Problem.""")
+        inp_data = self.point_sampler.sample_points()
+        normals = self.boundary_domain.normals(inp_data)
+        inp_data, target = apply_data_fun(self.neumann_fun,
+                                          inp_data,
+                                          whole_batch=self.whole_batch,
+                                          batch_size=len(self.point_sampler))
+        return {**inp_data,
+                'target': target,
+                'normal': normals}
 
     def serialize(self):
         dct = super().serialize()
         dct['neumann_fun'] = self.neumann_fun.__name__
-        dct['dataset_size'] = self.datacreator.dataset_size
-        dct['sampling_strategy'] = self.datacreator.sampling_strategy
-        dct['boundary_sampling_strategy'] = self.datacreator.boundary_sampling_strategy
         return dct
 
 
@@ -471,35 +456,24 @@ class DiffEqBoundaryCondition(BoundaryCondition):
     Parameters
     ----------
     bound_condition_fun : function handle
-        A method that takes the output and input (in the usual dictionary form)
+        A method that takes the output and input (in the usual dictionary form)
         of a model, the boundary normals and additional data (given through
         data_fun, and
         only when needed) as an input. The method then computes and returns 
         the desired boundary condition.
     name : str
-        name of this condition (should be unique per problem or variable)
+        name of this condition (should be unique per condition)
     norm : torch.nn.Module
         A Pytorch module which forward pass returns the scalar norm of the difference of
         two input tensors, and is therefore similar to the implementation of nn.MSELoss.
         The norm is used to compute the loss for the deviation of the model from the
         given data.
-    sampling_strategy : str
-        The sampling strategy used to sample data points for this condition. See domains
-        for more details.
-    boundary_sampling_strategy : str
-        The sampling strategy used to sample the boundary variable's points for this
-        condition. See domains for more details.
-    weight : float
+    point_sampler: DataSampler
+        A sampler that creates the training/validation points for this condition.
+    weight : float, optional
         Scalar weight of this condition that is used in the weighted sum for the
         training loss. Defaults to 1.
-    dataset_size : int, list, tuple or dic
-        Amount of samples in the used dataset. The dataset is generated once at the
-        beginning of the training.
-        If an int is given, the methode will use at least as many data points as the
-        number. The number of desired points can also be uniquely picked for each
-        variable, if a list, tuple or dic is given as an input. Then the whole number
-        of data points will be the product of the given numbers.
-    data_fun : function handle
+    data_fun : function handle, optional
         A method that represents the right-hand side of the boundary condition. As
         an input it takes the boundary points in the usual dictionary form.
         If the right-hand side is independent of the model, it is more efficient to
@@ -510,30 +484,23 @@ class DiffEqBoundaryCondition(BoundaryCondition):
     data_fun_whole_batch : bool, optional
         Specifies if the data_fun can work with a whole batch of data (then True)
         or every sample point has to be evaluated alone (False). 
-    data_plot_variables : bool or tuple
+    data_plot_variables : bool or tuple, optional
         The variables which are used to log the used training data in a scatter plot.
         If False, no plots are created. If True, behaviour is defined in each condition.
     """
 
-    def __init__(self, bound_condition_fun, name, norm,
-                 sampling_strategy='random', boundary_sampling_strategy='random',
-                 weight=1.0, dataset_size=10000, data_fun=None,
+    def __init__(self, bound_condition_fun, name, norm, point_sampler,
+                 boundary_domain, data_fun=None, weight=1.0, solution_name='u',
                  data_fun_whole_batch=True, data_plot_variables=True):
-        super().__init__(name, norm, weight=weight,
-                         track_gradients=True,
+        super().__init__(name, norm, weight=weight, point_sampler=point_sampler,
+                         track_gradients=False, boundary_domain=boundary_domain,
                          data_plot_variables=data_plot_variables)
         self.bound_condition_fun = bound_condition_fun
         self.data_fun = data_fun
         self.data_fun_whole_batch = data_fun_whole_batch
-        self.dataset_size = dataset_size
-        self.dataset_len = get_data_len(dataset_size)
-        self.datacreator = dc.BoundaryDataCreator(variables=None,
-                                                  dataset_size=dataset_size,
-                                                  sampling_strategy=sampling_strategy,
-                                                  boundary_sampling_strategy=boundary_sampling_strategy)
 
     def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.variables})
+        u = model({v: data[v] for v in self.setting.domain.space})
         inp = prepare_user_fun_input(self.bound_condition_fun,
                                      {**u,
                                       **data,
@@ -542,37 +509,25 @@ class DiffEqBoundaryCondition(BoundaryCondition):
         return self.norm(err, torch.zeros_like(err))
 
     def get_data(self):
-        if self.is_registered():
-            self.datacreator.variables = self.setting.variables
-            self.datacreator.boundary_variable = self.boundary_variable
-            inp_data = self.datacreator.get_data()
-
-            normals = self.setting.variables[self.boundary_variable] \
-                .domain.boundary_normal(inp_data[self.boundary_variable])
-
-            if self.data_fun is None:
-                return {**inp_data,
-                        'normal': normals}
-            else:
-                inp_data, data = apply_data_fun(self.data_fun,
-                                                {**inp_data, 'normal': normals},
-                                                whole_batch=self.data_fun_whole_batch,
-                                                batch_size=self.dataset_len)
-                return {**inp_data,
-                        'data': data,
-                        'normal': normals}
+        inp_data = self.point_sampler.sample_points()
+        normals = self.boundary_domain.normals(inp_data)
+        if self.data_fun is None:
+            return {**inp_data,
+                    'normal': normals}
         else:
-            raise RuntimeError("""Conditions need to be registered in a
-                                  Variable or Problem.""")
+            inp_data, data = apply_data_fun(self.data_fun,
+                                            {**inp_data, 'normal': normals},
+                                            whole_batch=self.data_fun_whole_batch,
+                                            batch_size=len(self.point_sampler))
+            return {**inp_data,
+                    'data': data,
+                    'normal': normals}
 
     def serialize(self):
         dct = super().serialize()
         dct['bound_condition_fun'] = self.bound_condition_fun.__name__
         if self.data_fun is not None:
             dct['data_fun'] = self.data_fun.__name__
-        dct['dataset_size'] = self.datacreator.dataset_size
-        dct['sampling_strategy'] = self.datacreator.sampling_strategy
-        dct['boundary_sampling_strategy'] = self.datacreator.boundary_sampling_strategy
         return dct
 
 

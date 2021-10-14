@@ -41,11 +41,24 @@ class ProductSampler(DataSampler):
 
     def sample_points(self):
         b_points = self.sampler_b.sample_points()
-        
-        for b in b_points:
-            self.sampler_a.update(b)
+        # if callable(sampler_a.domain):
+        #for b in b_points:
+        #    self.sampler_a.update(b)
+        #else:
+        a_points = self.sampler_a.sample_points()
+        output = self._mesh_sample_points(a_points, b_points)
+        return output
 
-        return super().sample_points()
+    def _mesh_sample_points(self, points_in_a, points_in_b):
+        combinations = [np.arange(0, len(self.sampler_a)),
+                        np.arange(0, len(self.sampler_b))]
+        index = np.array(np.meshgrid(*combinations)).T.reshape(-1, 2)
+        points = {}
+        for vname in points_in_a:
+            points[vname] = points_in_a[vname][index[:, 0]]
+        for vname in points_in_b:
+            points[vname] = points_in_b[vname][index[:, 1]]
+        return points
 
 
 class ConcatSampler(DataSampler):

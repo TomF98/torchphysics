@@ -5,7 +5,7 @@ class Space(Counter):
 
     def __init__(self, variables_dims):
         # set counter of variable names and their dimensionalities
-        super.__init__(variables_dims)
+        super().__init__(variables_dims)
 
     def __mul__(self, other):
         assert isinstance(other, Space)

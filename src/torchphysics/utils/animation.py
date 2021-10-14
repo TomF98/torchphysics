@@ -6,14 +6,13 @@ from matplotlib import cm, colors
 from matplotlib import animation as anim
 import numpy as np
 import torch
+
 from . import plot 
-from ..problem.domain.domain1D import Interval
+from ..problem.samplers.plot_samplers import AnimationSampler
 
 
-def animation(model, solution_name, plot_variable, domain_points,
-              animation_variable, frame_number, device='cpu', 
-              ani_speed=50, angle=[30, 30], dic_for_other_variables=None,
-              all_variables=None, plot_output_entries=[-1], 
+def animation(model, solution_name, ani_sampler,
+              ani_speed=50, angle=[30, 30], plot_output_entries=[-1], 
               ani_type=''):
     '''Main function for animations
     
@@ -74,10 +73,24 @@ def animation(model, solution_name, plot_variable, domain_points,
     animation.FuncAnimation
         The function that handles the animation  
     '''    
-    if not isinstance(animation_variable.domain, Interval):
-        raise ValueError('Domain of animation variable has to be an interval')
+    assert isinstance(ani_sampler, AnimationSampler), \
+        """The sampler has to be a AnimationSampler!"""
     plot_output_entries = plot._decide_plot_entries(model, solution_name,
                                                     plot_output_entries)
+    ani_fun = _find_plot_function(ani_sampler, plot_output_entries, ani_type)
+    if ani_fun is not None:
+        return ani_fun(model=model, solution_name=solution_name,
+                       ani_sampler=ani_sampler,
+                       angle=angle, ani_speed=ani_speed,
+                       plot_output_entries=plot_output_entries)
+    else:
+        raise NotImplementedError(f"""Animations for a  
+                                      {model.solution_dims[solution_name]} 
+                                      dimensional output are not implemented!'  
+                                      Please specify the output to animate.""")
+
+
+def _find_plot_function(ani_sampler, plot_output_entries, ani_type):
     # check if a plot type is specified
     ani_types = {'line': animation_line, 'surface_2D': animation_surface2D,
                  'curve': animation_curve_3D, 'quiver_2D': animation_quiver_2D, 
@@ -87,89 +100,90 @@ def animation(model, solution_name, plot_variable, domain_points,
     if ani_fun is None:
     # If only one output should be used we create a line/surface animation
         if len(plot_output_entries) == 1:
-            ani_fun = _animation_for_one_output(plot_variable)
+            ani_fun = _animation_for_one_output(ani_sampler.dim)
         # If two outputs should be used we create a curve/quiver animation
         if len(plot_output_entries) == 2:
-            ani_fun = _animation_for_two_outputs(plot_variable)
-    if ani_fun is not None:
-        return ani_fun(model=model, solution_name=solution_name,
-                       plot_variable=plot_variable, points=domain_points,
-                       angle=angle, ani_speed=ani_speed,
-                       dic_for_other_variables=dic_for_other_variables,
-                       all_variables=all_variables, frame_number=frame_number,
-                       device=device, plot_output_entry=plot_output_entries, 
-                       animation_variable=animation_variable)
-    else:
-        raise NotImplementedError(f"""Animations for a  
-                                      {model.solution_dims[solution_name]} 
-                                      dimensional output are not implemented!'  
-                                      Please specify the output to animate.""")
+            ani_fun = _animation_for_two_outputs(ani_sampler.dim)
+    return ani_fun
 
 
-def _animation_for_one_output(plot_variable):
+def _animation_for_one_output(domain_dim):
     '''Handles animations if only one output of the model should be used.
     It will create a line or surface animation.
     '''
     # 2D animation (surface plot)
-    if plot_variable.domain.dim == 2:
+    if domain_dim == 2:
         return animation_surface2D
     # 1D animation (line plot):    
-    elif plot_variable.domain.dim == 1:
+    elif domain_dim == 1:
         return animation_line
     else:
         raise NotImplementedError
 
 
-def animation_line(model, solution_name, plot_variable, points,
-                   animation_variable, frame_number,
-                   device, ani_speed, angle, dic_for_other_variables,
-                   all_variables, plot_output_entry):
+def _animation_for_two_outputs(domain_dim):
+    '''Handles animations if two outputs of the model should be used.
+    It will create a curve or quiver animation.
+    '''
+    # animate curve in 3D
+    if domain_dim is None:
+        return animation_curve_3D
+    # animate quiver plot   
+    elif domain_dim == 2:
+        return animation_quiver_2D
+    else:
+        raise NotImplementedError
+
+
+def animation_line(model, solution_name, ani_sampler, ani_speed,
+                   angle, plot_output_entries):
     '''Handels 1D animations, inputs are the same as animation().
     '''
-    # create input dic. for the model
-    points, domain_points, input_dic, animation_points = \
-        _create_input_for_animation(plot_variable, points, animation_variable,
-                                    frame_number, device, dic_for_other_variables,
-                                    all_variables)
-    # evaluate the model and get max and min values over all points
-    outputs = _evaluate_model(model, solution_name, points, animation_points, 
-                              animation_variable.name, input_dic, plot_output_entry)
-    outputs = plot._take_norm_of_output(plot_output_entry, outputs, axis=-1)
+    # create input and compute output
+    input_list = ani_sampler.sample_points()
+    outputs = _evaluate_model(model, solution_name, ani_sampler, 
+                              input_list, plot_output_entries)
+    outputs = plot._take_norm_of_output(plot_output_entries, outputs, axis=-1)
     output_max, output_min = _get_max_min(outputs)
+    domain_bounds = ani_sampler.bounds
+    domain_name = list(ani_sampler.domain.space.keys())
+    animation_name = list(ani_sampler.animation_domain.space.keys())[0]
     # construct the figure handle and axis for the animation
     fig = plt.figure()
-    ax = plt.axes(xlim=(np.amin(domain_points), np.amax(domain_points)),
+    ax = plt.axes(xlim=(domain_bounds[0], domain_bounds[1]),
                   ylim=(output_min, output_max))
-    ax.set_xlabel(plot_variable.name)
+    ax.set_xlabel(domain_name[0])
     ax.grid()
     line, = ax.plot([], [], lw=2)
     text_box = ax.text(0.05,0.95, '', bbox={'facecolor': 'w', 'pad': 5}, 
                        transform=ax.transAxes, va='top', ha='left')   
-    dic_for_other_variables = _check_dic_is_none(dic_for_other_variables)
     # create the animation
     def animate(frame_number, outputs, line):
-        line.set_data(domain_points.flatten(), outputs[:, frame_number, 0])
-        dic_for_other_variables[animation_variable.name] = \
-            animation_points[frame_number][0] 
-        # set new text
-        info_string = plot._create_info_text(dic_for_other_variables)  
-        text_box.set_text(info_string)
+        line.set_data(input_list[frame_number][domain_name[0]].flatten(),
+                      outputs[:, frame_number, 0])
+        set_new_text(ani_sampler.dic_for_other_variables,
+                     input_list[frame_number][animation_name][0],
+                     animation_name,
+                     text_box)
     
-    ani = anim.FuncAnimation(fig, animate, frames=frame_number, 
+    ani = anim.FuncAnimation(fig, animate, frames=ani_sampler.frame_number, 
                              fargs=(outputs, line), interval=ani_speed)
     return fig, ani
 
 
-def animation_surface2D(model, solution_name, plot_variable, points,
-                        animation_variable,
-                        frame_number, device, ani_speed, angle,
-                        dic_for_other_variables, all_variables, plot_output_entry):
+def set_new_text(variable_dic, new_ani_point, ani_name, text_box):
+    variable_dic[ani_name] = new_ani_point
+    info_string = plot._create_info_text(variable_dic)  
+    text_box.set_text(info_string)
+    
+    
+def animation_surface2D(model, solution_name, ani_sampler,
+                        angle, plot_output_entries):
     '''Handels 2D animations, inputs are the same as animation().
     '''
-    points, domain_points, input_dic, animation_points = \
-        _create_input_for_animation(plot_variable, points, animation_variable,
-                                    frame_number, device, dic_for_other_variables,
-                                    all_variables)
+    input_list = ani_sampler.sample_points()
+    outputs = _evaluate_model(model, solution_name, ani_sampler, 
+                              input_list, plot_output_entries)
     # evaluate the model and get max and min values over all points
     outputs = _evaluate_model(model, solution_name, points, animation_points, 
                               animation_variable.name, input_dic, plot_output_entry)
@@ -207,20 +221,6 @@ def animation_surface2D(model, solution_name, plot_variable, points,
                              fargs=(outputs, surf), interval=ani_speed)
 
     return fig, ani
-
-
-def _animation_for_two_outputs(plot_variable):
-    '''Handles animations if two outputs of the model should be used.
-    It will create a curve or quiver animation.
-    '''
-    # animate curve in 3D
-    if plot_variable is None:
-        return animation_curve_3D
-    # animate quiver plot   
-    elif plot_variable.domain.dim == 2:
-        return animation_quiver_2D
-    else:
-        raise NotImplementedError
 
 
 def animation_curve_3D(model, solution_name, plot_variable, points,
@@ -394,41 +394,31 @@ def _create_input_for_animation(plot_variable, points, animation_variable,
     return points, domain_points, input_dic, animation_points
 
 
-def _check_dic_is_none(dic_for_other_variables):
-    if dic_for_other_variables is None:
-        dic_for_other_variables = {}
-    return dic_for_other_variables
-
-
 def _get_max_min(points):
-    '''Returns the max and min value over all points. Needed to get a fixed y-(or z)axis.
+    '''Returns the max and min value over all points.
+    Needed to get a fixed y-(or z)axis.
     '''
     return np.amax(points), np.amin(points)
 
 
-def _evaluate_model(model, solution_name, points, animation_points, animation_name,
-                    input_dic, plot_output_entry):
+def _evaluate_model(model, solution_name, ani_sampler, 
+                    input_list, plot_output_entries):
     '''Evaluates the model at all domain and animation points
 
     Parameters
     ----------
     model : diffeqmodel
         The model
-    points : np.array
-        Number of points in the domain
-    animation_points : np.array
-        The points for the animation (e.g the points in time)
-    animation_name : str
-        The name of the animation variable
-    input_dic : dic
-        The input of the model
+    input_list : list
+        A list of dictionarys containg for each time point the input_dict.
     plot_output_entries : int or list, optional
-        Specifies what outputs of the model should be used. (see animation-method) 
+        Specifies what outputs of the model should be used.
     '''
-    outputs = np.zeros((points, len(animation_points), len(plot_output_entry)))
-    for i in range(len(animation_points)):
-        # only need to change the animation varibale
-        input_dic[animation_name] = animation_points[i][0]*torch.ones((points, 1))
+    outputs = np.zeros((ani_sampler.n_points, 
+                        ani_sampler.frame_number,
+                        len(plot_output_entries)))
+    for i in range(len(input_list)):
+        input_dic = input_list[i]
         out = model(input_dic)[solution_name]
-        outputs[:,i,:] = out.data.cpu().numpy()[:, plot_output_entry]
+        outputs[:, i, :] = out.data.cpu().numpy()[:, plot_output_entry]
     return outputs

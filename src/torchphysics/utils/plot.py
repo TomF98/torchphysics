@@ -3,7 +3,6 @@ neural networks
 '''
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
-import matplotlib.patches as patches
 import scipy.spatial
 import numpy as np
 import torch
@@ -93,12 +92,13 @@ def _plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
     plt.figure
         The figure handle of the created plot
     '''
-    inp_dic, output = _create_plot_output(model, plot_function, point_sampler)
+    inp_dic, output, out_shape = _create_plot_output(model, plot_function,
+                                                     point_sampler)
     domain_points = _extract_domain_points(inp_dic, point_sampler.domain, 
                                            len(point_sampler))
-    plot_fun = _find_plot_function(point_sampler, np.shape(output)[1], plot_type)
+    plot_fun = _find_plot_function(point_sampler, out_shape, plot_type)
     if plot_fun is not None:
-        return plot_fun(output=output, inp_dic=inp_dic, domain_points=domain_points,
+        return plot_fun(output=output, domain_points=domain_points,
                         point_sampler=point_sampler, angle=angle)
     else:
         raise NotImplementedError(f"""Plotting for a  
@@ -115,8 +115,12 @@ def _create_plot_output(model, plot_function, point_sampler):
     inp = prepare_user_fun_input(plot_function, {**model_out, **inp_dic})
     output = plot_function(**inp)
     if isinstance(output, torch.Tensor):
-        output = output.cpu().numpy()
-    return inp_dic, output
+        output = output.detach().cpu().numpy()
+    # get dimesnion of the output
+    out_shape = 1
+    if len(np.shape(output)) > 1:
+        out_shape = np.shape(output)[1] 
+    return inp_dic, output, out_shape
 
 
 def _extract_domain_points(input_dic, domain, length):
@@ -125,12 +129,13 @@ def _extract_domain_points(input_dic, domain, length):
     current_dim = 0
     for vname in domain.space:
         v_dim = domain.space[vname]
-        domain_points[:, current_dim:current_dim+v_dim] = input_dic[vname]
+        domain_points[:, current_dim:current_dim+v_dim] = \
+            input_dic[vname].detach().cpu().numpy()
         current_dim += v_dim
     return domain_points
 
 
-def _find_plot_function(point_sampler, plot_output_entries, plot_type):
+def _find_plot_function(point_sampler, out_shape, plot_type):
     # check if a plot type is specified
     plot_types = {'line': line_plot, 'surface_2D': surface2D,
                   'curve': curve3D, 'quiver_2D': quiver2D,
@@ -138,10 +143,10 @@ def _find_plot_function(point_sampler, plot_output_entries, plot_type):
     plot_fun = plot_types.get(plot_type)
     # If no (or wrong) type is given, try to find the correct type:
     if plot_fun is None:
-        if len(plot_output_entries) == 1:
-            plot_fun = _plot_for_one_output(point_sampler.dim)
-        if len(plot_output_entries) == 2:
-            plot_fun = _plot_for_two_outputs(point_sampler.dim)
+        if out_shape == 1:
+            plot_fun = _plot_for_one_output(point_sampler.domain.dim)
+        if out_shape == 2:
+            plot_fun = _plot_for_two_outputs(point_sampler.domain.dim)
     return plot_fun
 
 
@@ -165,13 +170,13 @@ def _plot_for_two_outputs(domain_dim):
     if domain_dim == 1:
         return curve3D
     # plot vector field/quiver in 2D
-    if domain_dim == 2:
+    elif domain_dim == 2:
         return quiver2D
     else:
         raise NotImplementedError("""Can't plot 2D-output on given domains""")
 
 
-def surface2D(output, inp_dic, domain_points, point_sampler, angle):
+def surface2D(output, domain_points, point_sampler, angle):
     '''Handels surface plots w.r.t. a two dimensional variable.
     Inputs are the same as _plot().
     '''
@@ -187,7 +192,7 @@ def surface2D(output, inp_dic, domain_points, point_sampler, angle):
     return fig
 
 
-def line_plot(output, inp_dic, domain_points, point_sampler, angle):
+def line_plot(output, domain_points, point_sampler, angle):
     '''Handels line plots w.r.t. a one dimensional variable.
     Inputs are the same as _plot().
     '''
@@ -222,7 +227,7 @@ def surface2D_2_variables(output, inp_dic, domain_points, point_sampler, angle):
     return fig
 
 
-def curve3D(output, inp_dic, domain_points, point_sampler, angle):
+def curve3D(output, domain_points, point_sampler, angle):
     '''Handles curve plots where the output is 2D and the domain is 1D.
     '''
     fig, ax = _create_figure_and_axis(angle)
@@ -240,7 +245,7 @@ def curve3D(output, inp_dic, domain_points, point_sampler, angle):
     return fig
 
 
-def quiver2D(output, inp_dic, domain_points, point_sampler, angle):
+def quiver2D(output, domain_points, point_sampler, angle):
     '''Handles quiver/vector field plots w.r.t. a two dimensional variable.
     Inputs are the same as _plot().
     '''
@@ -271,7 +276,7 @@ def quiver2D(output, inp_dic, domain_points, point_sampler, angle):
     return fig
 
 
-def contour_2D(output, inp_dic, domain_points, point_sampler, angle):
+def contour_2D(output, domain_points, point_sampler, angle):
     '''Handles colormap/contour plots w.r.t. a two dimensional variable.
     Inputs are the same as _plot().
     '''
@@ -368,11 +373,8 @@ def _outline_domain(points_sampler, ax):
     """Outlines a 2D-domain
     """
     poly = points_sampler.domain.outline()
-    if isinstance(poly, (patches.Rectangle, patches.Circle, patches.Polygon)):
-        ax.add_patch(poly)
-    else:  # domain operations or polynom are used:
-        for p in poly:
-            ax.plot(p[:, 0], p[:, 1], color='k', linewidth=2, linestyle='--')
+    for p in poly:
+        ax.plot(p[:, 0], p[:, 1], color='k', linewidth=2, linestyle='--')
 
 
 def _set_x_y_axis_data(point_sampler, ax):

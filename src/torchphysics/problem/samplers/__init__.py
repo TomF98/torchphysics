@@ -9,3 +9,6 @@ from .explicit_samplers import (GridSampler,
                                 RandomUniformSampler, 
                                 GaussianSampler, 
                                 LHSSampler)
+
+
+from .plot_sampler import PlotSampler
