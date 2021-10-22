@@ -23,7 +23,6 @@ class Domain:
         # open domain
         raise NotImplementedError
 
-    @abc.abstractmethod
     def __add__(self, other):
         """Creates the union of the two input domains.
 
@@ -33,9 +32,10 @@ class Domain:
             The other domain that should be united with the domain.
             Has to be of the same dimension.
         """
-        raise NotImplementedError
+        if self.space != other.space:
+            raise ValueError("""Intersected domains should lie in the same space.""")
+        return UnionDomain(self, other)
 
-    @abc.abstractmethod
     def __sub__(self, other):
         """Creates the cut of domain other from self.
 
@@ -45,9 +45,10 @@ class Domain:
             The other domain that should be cut off the domain.
             Has to be of the same dimension.
         """
-        raise NotImplementedError
+        if self.space != other.space:
+            raise ValueError("""Intersected domains should lie in the same space.""")
+        return CutDomain(self, other)
 
-    @abc.abstractmethod
     def __and__(self, other):
         """Creates the intersection of the two input domains.
 
@@ -55,12 +56,25 @@ class Domain:
         ----------
         other : Domain
             The other domain that should be intersected with the domain.
-            Has to be of the same dimension.
+            Has to lie in the same space.
         """
-        raise NotImplementedError
+        if self.space != other.space:
+            raise ValueError("""Intersected domains should lie in the same space.""")
+        return IntersectionDomain(self, other)
+
+    def __mul__(self, other):
+        """Creates the cartesian product of this domain and another domain.
+
+        Parameters
+        ----------
+        other : Domain
+            The other domain to create the cartesian product with.
+            Should lie in a disjoint space.
+        """
+        return ProductDomain(self, other)
 
     @abc.abstractmethod
-    def __contains__(self, points):
+    def __contains__(self, points, **params):
         """Checks for every point in points if it lays inside the domain.
 
         Parameters
@@ -78,7 +92,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def bounding_box(self):
+    def bounding_box(self, **params):
         """Computes the bounds of the domain.
 
         Returns 
@@ -91,7 +105,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_grid(self, n=None, d=None):
+    def sample_grid(self, n=None, d=None, **params):
         """Greates a equdistant grid in the domain.
 
         Parameters
@@ -102,7 +116,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_random_uniform(self, n=None, d=None):
+    def sample_random_uniform(self, n=None, d=None, **params):
         """Greates a random uniform points in the domain.
 
         Parameters
@@ -112,10 +126,6 @@ class Domain:
         """
         raise NotImplementedError
 
-
-    def __mul__(self, other):
-        return ProductDomain(self, other)
-
     def _divide_points_to_space_variables(self, points):
         """Divides sample points of the form np.array(number_of_points, self.dim)
         to each variable of the given Space.
@@ -124,7 +134,7 @@ class Domain:
         ----------
         points: list, array
             The created sample/data points, need to fit the given dimension
-        
+
         Returns
         -------
         dict
@@ -149,7 +159,7 @@ class Domain:
         point_dic: dic
             The dictionary of points 
             (most likely created with divide_points_to_space_variables)
-        
+
         Returns
         -------
         points: array
@@ -177,9 +187,9 @@ class BoundaryDomain(Domain):
         super().__init__(domain.space, dim=domain.dim-1)
 
     @abc.abstractmethod
-    def normal(self, points):
+    def normal(self, points, **params):
         """Computes the normal vector at each point in points.
-        
+
         Parameters
         ----------
         points : list or array
@@ -253,14 +263,29 @@ class ProductDomain(Domain):
         """
         return ProductDomain(self.domain_a & other, self.domain_b & other)
 
-    def __contains__(self, points):
+    def __contains__(self, points, **params):
         return
 
-    def bounding_box(self):
+    def bounding_box(self, **params):
         return
 
-    def sample_grid(self, n):
+    def sample_grid(self, n=None, d=None, **params):
         return
 
-    def sample_random_uniform(self, n):
+    def sample_random_uniform(self, n=None, d=None, **params):
         return
+
+"""
+Classes for boolean domains
+"""
+
+class UnionDomain(Domain):
+    pass
+
+
+class CutDomain(Domain):
+    pass
+
+
+class IntersectionDomain(Domain):
+    pass
