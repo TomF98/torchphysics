@@ -73,8 +73,7 @@ class Domain:
         """
         return ProductDomain(self, other)
 
-    @abc.abstractmethod
-    def __contains__(self, points, **params):
+    def __contains__(self, points):
         """Checks for every point in points if it lays inside the domain.
 
         Parameters
@@ -89,6 +88,10 @@ class Domain:
             A an array of the shape (len(points), 1) where every entry contains
             true if the point was inside or false if not.
         """
+        return self._contains(points)
+
+    @abc.abstractmethod
+    def contains(self, points, **params):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -126,52 +129,6 @@ class Domain:
         """
         raise NotImplementedError
 
-    def _divide_points_to_space_variables(self, points):
-        """Divides sample points of the form np.array(number_of_points, self.dim)
-        to each variable of the given Space.
-
-        Parameters
-        ----------
-        points: list, array
-            The created sample/data points, need to fit the given dimension
-
-        Returns
-        -------
-        dict
-            A dictionary containing the input points but split up, to each 
-            variable. E.g Space = R1('x')*R1('y') then the output would be
-            output = {'x': points[:, 0:1], 'y': points[:, 1:2]}
-        """
-        output = {}
-        current_dim = 0
-        for vname in self.space:
-            v_dim = self.space[vname]
-            output[vname] = points[:, current_dim:current_dim+v_dim].astype(np.float32)
-            current_dim += v_dim
-        return output
-
-    def _return_space_variables_to_point_list(self, point_dic):
-        """Concatenates sample points from a dict back to the form 
-        np.array(number_of_points, self.dim)
-
-        Parameters
-        ----------
-        point_dic: dic
-            The dictionary of points 
-            (most likely created with divide_points_to_space_variables)
-
-        Returns
-        -------
-        points: array
-            the point array of the form np.array(number_of_points, self.dim)
-        """
-        # if the points are not a dictonary just return
-        # (not created with our sampling)
-        if isinstance(point_dic, (list, np.ndarray)):
-            return point_dic
-        point_list = list(point_dic.values())
-        return np.column_stack(point_list)
-
     def _cut_points(self, n, points):
         """Deletes some random points, if more than n were sampled
         (can for example happen by grid-sampling).
@@ -183,8 +140,9 @@ class Domain:
 
 
 class BoundaryDomain(Domain):
-    def __init__(self, domain):
+    def __init__(self, domain, tol=1e-6):
         super().__init__(domain.space, dim=domain.dim-1)
+        self.tol = tol
 
     @abc.abstractmethod
     def normal(self, points, **params):

@@ -2,7 +2,52 @@ import numpy as np
 import shapely
 import shapely.geometry as s_geo
 import shapely.ops as s_ops
+import torch
+
 from .domain import Domain, LambdaDomain, BoundaryDomain
+
+
+class Domain2D(Domain):
+    def __init__(self, space, dim):
+        if space.dim != 2:
+            raise ValueError("""A 2d Domain can only be created in a 2d space.""")
+        super().__init__(space, dim=dim)
+
+
+class Circle(Domain2D):
+    """Class for circles.
+
+    Parameters
+    ----------
+    space : Space
+        The space in which this object lays.
+    center : array_like or callable
+        The center of the circle, e.g. center = [5,0].
+    radius : number or callable
+        The radius of the circle.
+    resolution : number, optional
+        The resolution that should be used to approximate the circle with a polygon.
+        The number of used vertices is around 4*resolution.
+        See shapely for exact informations.
+    """
+    def __new__(cls, space, center, radius, resolution=10, tol=1e-06):
+        if callable(center) or callable(radius):
+            params = {'center': center, 'radius': radius, 'resolution': resolution}
+            return LambdaDomain(class_=cls, params=params, space=space, dim=2, tol=tol)
+        return super(Circle, cls).__new__(cls)
+
+    def __init__(self, space, center, radius):
+        self.space = space
+        self.center = UserFun(center)
+        self.radius = UserFun(radius)
+        super().__init__(space=space)
+
+    def contains(self, points, **other_vars):
+        return torch.norm(self.space.as_tensor(points)-self.center(**other_vars)) < self.radius(**other_vars)
+
+
+class CircleBoundary(BoundaryDomain):
+    pass
 
 
 class Domain2D(Domain):
@@ -23,7 +68,7 @@ class Domain2D(Domain):
 
     def __and__(self, other):
         assert other.dim == 2
-        new_poly = self.polygon & other.polygon 
+        new_poly = self.polygon & other.polygon
         return Polygon(space=self.space, vertices=new_poly)
 
     def outline(self):
@@ -35,10 +80,10 @@ class Domain2D(Domain):
             The vertices of the domain. Inner vertices are appended in there
             own list.
         """
-        cords = [np.array(self.polygon.exterior.coords)] 
+        cords = [np.array(self.polygon.exterior.coords)]
         for i in self.polygon.interiors:
             cords.append(np.array(i.coords))
-        return cords 
+        return cords
 
     def is_inside(self, points):
         points = super()._check_single_point(points)
@@ -61,7 +106,7 @@ class Domain2D(Domain):
         for t in s_ops.triangulate(self.polygon):
             new_points = self._sample_in_triangulation(t, n)
             points = np.append(points, new_points, axis=0)
-            # remember the biggest triangle that was inside, if later 
+            # remember the biggest triangle that was inside, if later
             # sample some additional points need to be added
             if t.within(self.polygon) and t.area > t_area:
                 big_t = [t][0]
@@ -76,7 +121,7 @@ class Domain2D(Domain):
         scaled_n = int(np.ceil(t.area/self.polygon.area * n))
         new_points = self._random_points_in_triangle(scaled_n, corners)
         # when the polygon has holes or is non convex, it can happen
-        # that the triangle is not completly in the polygon 
+        # that the triangle is not completly in the polygon
         if not t.within(self.polygon):
             inside = self.is_inside(new_points)
             index = np.where(inside)[0]
@@ -94,12 +139,12 @@ class Domain2D(Domain):
         return np.add(np.add(corners[0], axis_1), axis_2).astype(np.float32)
 
     def _check_enough_points_sampled(self, n, points, big_t):
-        # if not enough points are sampled, create some new points in the biggest 
+        # if not enough points are sampled, create some new points in the biggest
         # triangle
         while len(points) < n:
             points = np.append(points,
                                self._sample_in_triangulation(big_t, n-len(points)),
-                               axis=0)                          
+                               axis=0)
         return points
 
     def sample_grid(self, n):
@@ -111,11 +156,11 @@ class Domain2D(Domain):
 
     def _create_points_in_bounding_box(self, n):
         bounds = self.bounding_box()
-        side_lengths = [bounds[1]-bounds[0], bounds[3]-bounds[2]] 
-        scaled_n = int(n * side_lengths[0]*side_lengths[1]/self.polygon.area)   
-        vertices_of_box = np.array([[bounds[0], bounds[2]], [bounds[1], bounds[2]], 
+        side_lengths = [bounds[1]-bounds[0], bounds[3]-bounds[2]]
+        scaled_n = int(n * side_lengths[0]*side_lengths[1]/self.polygon.area)
+        vertices_of_box = np.array([[bounds[0], bounds[2]], [bounds[1], bounds[2]],
                                     [bounds[1], bounds[3]], [bounds[0], bounds[3]]])
-        return Parallelogram.grid_in_box(self, scaled_n, side_lengths, vertices_of_box)   
+        return Parallelogram.grid_in_box(self, scaled_n, side_lengths, vertices_of_box)
 
     def _delete_outside(self, points):
         inside = self.is_inside(points)
@@ -130,6 +175,7 @@ class Domain2D(Domain):
 class BoundaryDomain2D(BoundaryDomain):
     """Handels the boundary in 2D.
     """
+
     def __init__(self, domain: Domain2D):
         super().__init__(domain)
         self.domain = domain
@@ -170,7 +216,7 @@ class BoundaryDomain2D(BoundaryDomain):
         points = np.zeros((n, 2))
         for boundary_part in outline:
             points, index, current_length = \
-                self._distribute_line_to_boundary(points, index, line_points, 
+                self._distribute_line_to_boundary(points, index, line_points,
                                                   boundary_part, current_length)
         return super().divide_points_to_space_variables(points)
 
@@ -191,7 +237,7 @@ class BoundaryDomain2D(BoundaryDomain):
                 if corner_index >= len(corners) - 1:
                     break
                 side_length = np.linalg.norm(corners[corner_index+1]
-                                              - corners[corner_index])
+                                             - corners[corner_index])
         return points, index, current_length
 
     def _translate_point_to_bondary(self, index, line_points, corners,
@@ -205,7 +251,7 @@ class BoundaryDomain2D(BoundaryDomain):
         points = super().return_space_variables_to_point_list(points)
         outline = self.domain.outline()
         self._compute_normals(outline)
-        index = self._where_on_boundary(points, outline)     
+        index = self._where_on_boundary(points, outline)
         return self.normal_list[index].astype(np.float32)
 
     def _compute_normals(self, outline):
@@ -261,13 +307,13 @@ class Circle(Domain2D):
         The resolution that should be used to approximate the circle with a polygon.
         The number of used vertices is around 4*resolution.
         See shapely for exact informations.
-    """   
+    """
     def __new__(cls, space, center, radius, resolution=10, tol=1e-06):
         if callable(center) or callable(radius):
             params = {'center': center, 'radius': radius, 'resolution': resolution}
             return LambdaDomain(class_=cls, params=params, space=space, dim=2, tol=tol)
         return super(Circle, cls).__new__(cls)
-        
+
     def __init__(self, space, center, radius, resolution=10, tol=1e-06):
         circle = s_geo.Point(center).buffer(radius, resolution=resolution)
         super().__init__(polygon=circle, space=space, tol=tol)
@@ -290,7 +336,7 @@ class Ellipse(Domain2D):
         The number of vertices that should be used to approixmate the ellipse.
         The number of used vertices is around 4*resolution.
         See shapely for exact informations.
-    """  
+    """
     def __new__(cls, space, center, radius_x, radius_y, angle=0,
                 resolution=10, tol=1e-06):
         if any([callable(center), callable(radius_x),
@@ -299,7 +345,7 @@ class Ellipse(Domain2D):
                       'angle': angle, 'resolution': resolution}
             return LambdaDomain(class_=cls, params=params, space=space, dim=2, tol=tol)
         return super(Ellipse, cls).__new__(cls)
-        
+
     def __init__(self, space, center, radius_x, radius_y, angle=0,
                  resolution=10, tol=1e-06):
         circle = s_geo.Point(center).buffer(1, resolution=resolution)
@@ -326,7 +372,7 @@ class Parallelogram(Domain2D):
         E.g. for the unit square: corner_dl = [0,0], corner_dr = [1,0],
                                   corner_tl = [0,1].
     """
-    def __new__(cls, space, corner_dl, corner_dr, corner_tl, tol=1e-06) :
+    def __new__(cls, space, corner_dl, corner_dr, corner_tl, tol=1e-06):
         if any([callable(corner_dl), callable(corner_dr), callable(corner_tl)]):
             params = {'corner_dl': corner_dl, 'corner_dr': corner_dr,
                       'corner_tl': corner_tl}
@@ -339,9 +385,9 @@ class Parallelogram(Domain2D):
 
     def _get_vertices(self, corner_dl, corner_dr, corner_tl):
         # cast to array:
-        corner_dl = np.array(corner_dl) 
-        corner_dr = np.array(corner_dr) 
-        corner_tl = np.array(corner_tl)  
+        corner_dl = np.array(corner_dl)
+        corner_dr = np.array(corner_dr)
+        corner_tl = np.array(corner_tl)
         return [corner_dl, corner_dr, corner_dr+(corner_tl-corner_dl), corner_tl]
 
     def sample_grid(self, n):
@@ -390,7 +436,7 @@ class Polygon(Domain2D):
             if callable(vertices):
                 params = {'vertices': vertices}
                 return LambdaDomain(class_=cls, params=params, space=space,
-                                    dim=2, tol=tol) 
+                                    dim=2, tol=tol)
         return super(Polygon, cls).__new__(cls)
 
     def __init__(self, space, vertices=None, shapely_poly=None, tol=1e-06):
