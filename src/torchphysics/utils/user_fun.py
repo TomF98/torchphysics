@@ -28,10 +28,13 @@ class UserFunction:
         self.args = f_args + f_kwonlyargs
 
         # defaults always align at the end of the args
-        self.defaults = {self.f_args[-i]: f_defaults[-i] for i in range(len(f_defaults),
-                                                                        0,
-                                                                        -1)}
-        self.defaults.update(f_kwonlydefaults)
+        self.defaults = {}
+        if not f_defaults is None:
+            self.defaults = {self.f_args[-i]: f_defaults[-i] for i in range(len(f_defaults),
+                                                                            0,
+                                                                            -1)}
+        if not f_kwonlydefaults is None:
+            self.defaults.update(f_kwonlydefaults)
 
     def __call__(self,  vectorize=False, **args):
         # check that every necessary arg is given

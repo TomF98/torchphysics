@@ -2,7 +2,7 @@ import numpy as np
 import shapely
 import shapely.geometry as s_geo
 import shapely.ops as s_ops
-from .domain import Domain, LambdaDomain, BoundaryDomain
+from .domain import Domain, BoundaryDomain
 
 
 class Domain2D(Domain):

@@ -1,23 +1,36 @@
 import abc
-import numpy as np
-import warnings
+import torch
+import copy 
+
+from ...utils.user_fun import UserFunction
 
 
 class Domain:
-    def __init__(self, space, dim=None):
+
+    def __init__(self, constructor, params, space, dim=None):
         self.space = space
         if dim is None:
             self.dim = self.space.dim
         else:
             self.dim = dim
 
-    @abc.abstractmethod
+        self.constructor = constructor
+        self.params = params
+
+        # create a set of variables/spaces that this domain needs to be properly defined
+        self.necessary_variables = set()
+        for key in self.params:
+            if callable(self.params[key]):
+                self.params[key] = UserFunction(params[key])
+                for k in self.params[key].necessary_args:
+                    self.necessary_variables.add(k)
+        assert not any(var in self.necessary_variables for var in self.space)
+
     @property
     def boundary(self):
         # Domain object of the boundary
         raise NotImplementedError
 
-    @abc.abstractmethod
     @property
     def inner(self):
         # open domain
@@ -33,7 +46,8 @@ class Domain:
             Has to be of the same dimension.
         """
         if self.space != other.space:
-            raise ValueError("""Intersected domains should lie in the same space.""")
+            raise ValueError("""united domains should lie in the same space.""")
+        from .newdomainoperations import UnionDomain
         return UnionDomain(self, other)
 
     def __sub__(self, other):
@@ -46,7 +60,8 @@ class Domain:
             Has to be of the same dimension.
         """
         if self.space != other.space:
-            raise ValueError("""Intersected domains should lie in the same space.""")
+            raise ValueError("""complemented domains should lie in the same space.""")
+        from .newdomainoperations import CutDomain
         return CutDomain(self, other)
 
     def __and__(self, other):
@@ -60,6 +75,7 @@ class Domain:
         """
         if self.space != other.space:
             raise ValueError("""Intersected domains should lie in the same space.""")
+        from .newdomainoperations import IntersectionDomain
         return IntersectionDomain(self, other)
 
     def __mul__(self, other):
@@ -71,6 +87,7 @@ class Domain:
             The other domain to create the cartesian product with.
             Should lie in a disjoint space.
         """
+        from .newdomainoperations import ProductDomain
         return ProductDomain(self, other)
 
     @abc.abstractmethod
@@ -146,7 +163,7 @@ class Domain:
         current_dim = 0
         for vname in self.space:
             v_dim = self.space[vname]
-            output[vname] = points[:, current_dim:current_dim+v_dim].astype(np.float32)
+            output[vname] = points[:, current_dim:current_dim+v_dim]
             current_dim += v_dim
         return output
 
@@ -167,24 +184,70 @@ class Domain:
         """
         # if the points are not a dictonary just return
         # (not created with our sampling)
-        if isinstance(point_dic, (list, np.ndarray)):
+        if isinstance(point_dic, (list, torch.Tensor)):
             return point_dic
-        point_list = list(point_dic.values())
-        return np.column_stack(point_list)
+        point_list = []
+        for vname in self.space:
+            point_list.append(point_dic[vname])
+        return torch.column_stack(point_list)
 
-    def _cut_points(self, n, points):
-        """Deletes some random points, if more than n were sampled
-        (can for example happen by grid-sampling).
+    def __call__(self, **data):
         """
-        if len(points) > n:
-            index = np.random.choice(len(points), int(n), replace=False)
-            return points[index]
-        return points
+        (Partially) evaluate given lambda functions.
+        """
+        evaluated_params = {}
+        for key in self.params:
+            evaluated_params[key] = self._call_param(self.params[key], data)
+        if all(var in data for var in self.necessary_variables):
+            return self.constructor(space=self.space, **evaluated_params)
+        else:
+            self.params = evaluated_params
+            return self
+
+    def _call_param(self, param, args):
+        if callable(param):
+            if all(arg in args for arg in param.necessary_args):
+                return param(**args)
+            else:
+                # to avoid manipulation of given param obj, we create a copy
+                copy.deepcopy(param).set_default(**args)
+        return param
+
+    def _domain_construction(self, **args):
+        # first find number of parameters:
+        args_len = 1
+        if len(args) > 0:
+            args_len = len(list(args.values())[0])
+        d_params = {'param_len': args_len}
+        # evaluate possible domain values that are dependent on the input args
+        for key, domain_param in self.params.items():
+            if callable(domain_param):
+                d_params[key] = domain_param(**args)[:, None] 
+            else:
+                if isinstance(domain_param, torch.Tensor):
+                    d_params[key] = domain_param
+                else: 
+                    d_params[key] = torch.tensor(domain_param).float()
+        return d_params
 
 
 class BoundaryDomain(Domain):
+    
     def __init__(self, domain):
-        super().__init__(domain.space, dim=domain.dim-1)
+        assert isinstance(domain, Domain)
+        super().__init__(space=domain.space, dim=domain.dim-1,
+                         constructor=None, params={})
+        self.domain = domain
+
+    def __call__(self, **data):
+        evaluate_domain = self.domain(**data)
+        return evaluate_domain.boundary
+
+    def _domain_construction(self, **params):
+        return self.domain._domain_construction(**params)
+
+    def bounding_box(self, **params):
+        return self.domain.bounding_box(**params)
 
     @abc.abstractmethod
     def normal(self, points, **params):
@@ -204,88 +267,3 @@ class BoundaryDomain(Domain):
             normal vector at each entry from points.
         """
         pass
-
-
-class ProductDomain(Domain):
-    def __init__(self, domain_a, domain_b):
-        self.domain_a = domain_a
-        self.domain_b = domain_b
-        if not self.domain_a.space.keys().isdisjoint(self.domain_b.space):
-            warnings.warn("""Warning: The space of a ProductDomain will be the product
-                of its factor domains spaces. This may lead to unexpected behaviour.""")
-        space = self.domain_a.space * self.domain_b.space
-        super().__init__(space=space,
-                         dim=domain_a.dim + domain_b.dim)
-
-    @property
-    def boundary(self):
-        # Domain object of the boundary
-        return
-
-    @property
-    def inner(self):
-        # open domain
-        return ProductDomain(self.domain_a.inner, self.domain_b.inner)
-
-    @abc.abstractmethod
-    def __add__(self, other):
-        """Creates the union of the two input domains.
-
-        Parameters
-        ----------
-        other : Domain
-            The other domain that should be united with the domain.
-            Has to be of the same dimension.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def __sub__(self, other):
-        """Creates the cut of other from self.
-
-        Parameters
-        ----------
-        other : Domain
-            The other domain that should be cut off the domain.
-            Has to be of the same dimension.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def __and__(self, other):
-        """Creates the intersection of the two input domains.
-
-        Parameters
-        ----------
-        other : Domain
-            The other domain that should be intersected with the domain.
-            Has to be of the same dimension.
-        """
-        return ProductDomain(self.domain_a & other, self.domain_b & other)
-
-    def __contains__(self, points, **params):
-        return
-
-    def bounding_box(self, **params):
-        return
-
-    def sample_grid(self, n=None, d=None, **params):
-        return
-
-    def sample_random_uniform(self, n=None, d=None, **params):
-        return
-
-"""
-Classes for boolean domains
-"""
-
-class UnionDomain(Domain):
-    pass
-
-
-class CutDomain(Domain):
-    pass
-
-
-class IntersectionDomain(Domain):
-    pass
