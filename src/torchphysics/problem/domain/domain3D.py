@@ -2,7 +2,7 @@ import numpy as np
 import trimesh
 import logging
 
-from .domain import Domain, LambdaDomain, BoundaryDomain
+from .domain import Domain, BoundaryDomain
 from .domain2D import Polygon
 
 
