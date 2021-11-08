@@ -31,7 +31,7 @@ class Circle(Domain):
 
     def __contains__(self, points, **params):
         center, radius = self._compute_center_and_radius(**params, **points)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         norm = torch.norm(points - center, dim=1).reshape(-1, 1)
         return torch.le(norm[:, None], radius).reshape(-1, 1)
 
@@ -55,7 +55,7 @@ class Circle(Domain):
                             torch.multiply(r, torch.sin(phi))), dim=2)
         # [:,None,:] is needed so that the correct entries will be added
         points += center[:, None, :]
-        return super()._divide_points_to_space_variables(points.reshape(-1, 2))
+        return self.space.embed(points.reshape(-1, 2))
 
     def sample_grid(self, n=None, d=None, **params):
         center, radius = self._compute_center_and_radius(**params)
@@ -64,7 +64,7 @@ class Circle(Domain):
         grid = grid.repeat(num_of_params, 1).view(num_of_params, n, 2) 
         points = torch.multiply(radius, grid)
         points += center[:, None, :]
-        return super()._divide_points_to_space_variables(points.reshape(-1, 2))
+        return self.space.embed(points.reshape(-1, 2))
 
     def _compute_center_and_radius(self, **params):
         center = self.center(**params).reshape(-1, 2)
@@ -100,7 +100,7 @@ class CircleBoundary(BoundaryDomain):
 
     def __contains__(self, points, **params):
         center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         norm = torch.norm(points - center, dim=1).reshape(-1, 1)
         return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
@@ -111,7 +111,7 @@ class CircleBoundary(BoundaryDomain):
                             torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
         points += center[:, None, :]
-        return super()._divide_points_to_space_variables(points.reshape(-1, 2))
+        return self.space.embed(points.reshape(-1, 2))
 
     def sample_grid(self, n=None, d=None, **params):
         center, radius = self.domain._compute_center_and_radius(**params)
@@ -122,11 +122,11 @@ class CircleBoundary(BoundaryDomain):
                             torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
         points += center[:, None, :]
-        return super()._divide_points_to_space_variables(points.reshape(-1, 2))
+        return self.space.embed(points.reshape(-1, 2))
 
     def normal(self, points, **params):
         center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 2)
 

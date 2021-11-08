@@ -32,7 +32,7 @@ class Interval(Domain):
     def __contains__(self, points, **params):
         lb = self.lower_bound(**points, **params)
         ub = self.upper_bound(**points, **params)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         bigger_then_low = torch.ge(points[:, None], lb) 
         smaller_then_up = torch.le(points[:, None], ub) 
         return torch.logical_and(bigger_then_low, smaller_then_up).reshape(-1, 1)
@@ -43,7 +43,7 @@ class Interval(Domain):
         points = torch.rand((self.get_num_of_params(**params), n, 1))
         points *= (ub - lb)
         points += lb
-        return super()._divide_points_to_space_variables(points.reshape(-1, 1))
+        return self.space.embed(points.reshape(-1, 1))
 
     def sample_grid(self, n=None, d=None, **params):
         lb = self.lower_bound(**params)
@@ -51,7 +51,7 @@ class Interval(Domain):
         points = torch.linspace(0, 1, n+2)[1:-1, None]
         points = (ub - lb) * points 
         points += lb
-        return super()._divide_points_to_space_variables(points.reshape(-1, 1))
+        return self.space.embed(points.reshape(-1, 1))
 
     def bounding_box(self, **params):
         lb = self.lower_bound(**params)
@@ -89,7 +89,7 @@ class IntervalBoundary(BoundaryDomain):
     def _check_close_left_right(self, points, params):
         lb = self.domain.lower_bound(**points, **params)
         ub = self.domain.upper_bound(**points, **params)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         close_to_left = torch.isclose(points[:, None], lb)
         close_to_right = torch.isclose(points[:, None], ub)
         return close_to_left, close_to_right
@@ -99,14 +99,14 @@ class IntervalBoundary(BoundaryDomain):
         ub = self.domain.upper_bound(**params)
         random_boundary_index = torch.rand((self.get_num_of_params(**params), n, 1)) < 0.5 
         points = torch.where(random_boundary_index, lb, ub)
-        return super()._divide_points_to_space_variables(points.reshape(-1, 1))
+        return self.space.embed(points.reshape(-1, 1))
 
     def sample_grid(self, n=None, d=None, **params):
         lb = self.domain.lower_bound(**params)
         ub = self.domain.upper_bound(**params)
         b_index = torch.tensor([0, 1], dtype=bool).repeat(int(n/2.0) + 1)
         points = torch.where(b_index[:n], lb, ub)
-        return super()._divide_points_to_space_variables(points.reshape(-1, 1))
+        return self.space.embed(points.reshape(-1, 1))
 
     def normal(self, points, **params):
         close_to_left, _ = self._check_close_left_right(points, params)
@@ -132,7 +132,7 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
 
     def __contains__(self, points, **params):
         side = self.side(**points, **params)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         inside = torch.isclose(points[:, None], side)
         return inside.reshape(-1, 1)
 
@@ -140,7 +140,7 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
         side = self.side(**params)
         points = torch.ones((self.get_num_of_params(**params), n, 1))
         points *= side
-        return self._divide_points_to_space_variables(points.reshape(-1, 1))
+        return self.space.embed(points.reshape(-1, 1))
 
     def sample_grid(self, n=None, d=None, **params):
         return self.sample_random_uniform(n=n, d=d, **params)

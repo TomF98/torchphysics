@@ -150,54 +150,6 @@ class Domain:
         """
         raise NotImplementedError
 
-    def _divide_points_to_space_variables(self, points):
-        """Divides sample points of the form np.array(number_of_points, self.dim)
-        to each variable of the given Space.
-
-        Parameters
-        ----------
-        points: list, array
-            The created sample/data points, need to fit the given dimension
-
-        Returns
-        -------
-        dict
-            A dictionary containing the input points but split up, to each 
-            variable. E.g Space = R1('x')*R1('y') then the output would be
-            output = {'x': points[:, 0:1], 'y': points[:, 1:2]}
-        """
-        output = {}
-        current_dim = 0
-        for vname in self.space:
-            v_dim = self.space[vname]
-            output[vname] = points[:, current_dim:current_dim+v_dim]
-            current_dim += v_dim
-        return output
-
-    def _return_space_variables_to_point_list(self, point_dic):
-        """Concatenates sample points from a dict back to the form 
-        np.array(number_of_points, self.dim)
-
-        Parameters
-        ----------
-        point_dic: dic
-            The dictionary of points 
-            (most likely created with divide_points_to_space_variables)
-
-        Returns
-        -------
-        points: array
-            the point array of the form np.array(number_of_points, self.dim)
-        """
-        # if the points are not a dictonary just return
-        # (not created with our sampling)
-        if isinstance(point_dic, (list, torch.Tensor)):
-            return point_dic
-        point_list = []
-        for vname in self.space:
-            point_list.append(point_dic[vname])
-        return torch.column_stack(point_list)
-
     def __call__(self, **data):
         raise NotImplementedError
 

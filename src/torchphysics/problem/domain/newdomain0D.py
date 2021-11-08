@@ -26,7 +26,7 @@ class Point(Domain):
 
     def __contains__(self, points, **params):
         point_params = self.point(**params, **points)
-        points = self._return_space_variables_to_point_list(points)
+        points = self.space.as_tensor(points)
         inside = torch.isclose(points[:, None], point_params)
         return torch.all(inside, dim=2)
 
@@ -64,7 +64,7 @@ class Point(Domain):
         point_params = self.point(**params)
         points = torch.ones((self.get_num_of_params(**params), n, self.space.dim))
         points *= point_params
-        return self._divide_points_to_space_variables(points.reshape(-1, self.space.dim))
+        return self.space.embed(points.reshape(-1, self.space.dim))
 
     def sample_grid(self, n=None, d=None, **params):
         # for one single point grid and random sampling is the same
