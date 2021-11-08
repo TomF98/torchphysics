@@ -18,48 +18,58 @@ class Circle(Domain):
     """   
     def __init__(self, space, center, radius):
         assert space.dim == 2
-        params = {'center': center, 'radius': radius}
-        super().__init__(space=space, dim=2, constructor=Circle, params=params)
+        center, radius = self.transform_to_user_functions(center, radius)
+        self.center = center
+        self.radius = radius
+        super().__init__(space=space, dim=2)
+        self.set_necessary_variables(self.radius, self.center)
 
-    def _domain_construction(self, **params):
-        d_params = super()._domain_construction(**params)
-        d_params['center'] = d_params['center'].reshape(-1, 2)
-        return d_params
+    def __call__(self, **data):
+        new_center = self.center.partially_evaluate(**data)
+        new_radius = self.radius.partially_evaluate(**data)
+        return Circle(space=self.space, center=new_center, radius=new_radius)
 
     def __contains__(self, points, **params):
-        circle_params = self._domain_construction(**params, **points)
+        center, radius = self._compute_center_and_radius(**params, **points)
         points = self._return_space_variables_to_point_list(points)
-        norm = torch.norm(points - circle_params['center'], dim=1).reshape(-1, 1)
-        return torch.le(norm[:, None], circle_params['radius']).reshape(-1, 1)
+        norm = torch.norm(points - center, dim=1).reshape(-1, 1)
+        return torch.le(norm[:, None], radius).reshape(-1, 1)
 
     def bounding_box(self, **params):
-        circle_params = self._domain_construction(**params)
+        center, radius = self._compute_center_and_radius(**params)
         bounds = []
         for i in range(self.dim):
-            i_min = torch.min(circle_params['center'][:, i] - circle_params['radius'])
-            i_max = torch.max(circle_params['center'][:, i] + circle_params['radius'])
+            i_min = torch.min(center[:, i] - radius)
+            i_max = torch.max(center[:, i] + radius)
             bounds.append(i_min.item())
             bounds.append(i_max.item())
         return bounds
 
     def sample_random_uniform(self, n=None, d=None, **params):
-        circle_params = self._domain_construction(**params)
-        r = torch.sqrt(torch.rand((circle_params['param_len'], n, 1)))
-        r *= circle_params['radius'] 
-        phi = 2 * np.pi * torch.rand((circle_params['param_len'], n, 1))
+        center, radius = self._compute_center_and_radius(**params)
+        num_of_params = self.get_num_of_params(**params)
+        r = torch.sqrt(torch.rand((num_of_params, n, 1)))
+        r *= radius
+        phi = 2 * np.pi * torch.rand((num_of_params, n, 1))
         points = torch.cat((torch.multiply(r, torch.cos(phi)),
                             torch.multiply(r, torch.sin(phi))), dim=2)
         # [:,None,:] is needed so that the correct entries will be added
-        points += circle_params['center'][:, None, :]
+        points += center[:, None, :]
         return super()._divide_points_to_space_variables(points.reshape(-1, 2))
 
     def sample_grid(self, n=None, d=None, **params):
-        circle_params = self._domain_construction(**params)
+        center, radius = self._compute_center_and_radius(**params)
+        num_of_params = self.get_num_of_params(**params)
         grid = self._equidistant_points_in_circle(n)
-        grid = grid.repeat(circle_params['param_len'], 1).view(circle_params['param_len'], n, 2) 
-        points = torch.multiply(circle_params['radius'], grid)
-        points += circle_params['center'][:, None, :]
+        grid = grid.repeat(num_of_params, 1).view(num_of_params, n, 2) 
+        points = torch.multiply(radius, grid)
+        points += center[:, None, :]
         return super()._divide_points_to_space_variables(points.reshape(-1, 2))
+
+    def _compute_center_and_radius(self, **params):
+        center = self.center(**params).reshape(-1, 2)
+        radius = self.radius(**params)
+        return center,radius
 
     def _equidistant_points_in_circle(self, n):
         # use a sunflower seed arrangement:
@@ -72,9 +82,15 @@ class Circle(Domain):
                                      torch.multiply(radius, torch.sin(phi))))
         return points                             
 
+    def volume(self, **params):
+        radius = self.radius(**params)
+        volume = np.pi * radius**2
+        return volume.reshape(-1, 1)
+
     @property
     def boundary(self):
         return CircleBoundary(self)
+
 
 class CircleBoundary(BoundaryDomain):
 
@@ -83,32 +99,38 @@ class CircleBoundary(BoundaryDomain):
         super().__init__(domain)
 
     def __contains__(self, points, **params):
-        circle_params = self._domain_construction(**params, **points)
+        center, radius = self.domain._compute_center_and_radius(**params, **points)
         points = self._return_space_variables_to_point_list(points)
-        norm = torch.norm(points - circle_params['center'], dim=1).reshape(-1, 1)
-        return torch.isclose(norm[:, None], circle_params['radius']).reshape(-1, 1)
+        norm = torch.norm(points - center, dim=1).reshape(-1, 1)
+        return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
     def sample_random_uniform(self, n=None, d=None, **params):
-        circle_params = self._domain_construction(**params)
-        phi = 2 * np.pi * torch.rand((circle_params['param_len'], n, 1))
-        points = torch.cat((torch.multiply(circle_params['radius'], torch.cos(phi)),
-                            torch.multiply(circle_params['radius'], torch.sin(phi))), 
+        center, radius = self.domain._compute_center_and_radius(**params)
+        phi = 2 * np.pi * torch.rand((self.get_num_of_params(**params), n, 1))
+        points = torch.cat((torch.multiply(radius, torch.cos(phi)),
+                            torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
-        points += circle_params['center'][:, None, :]
+        points += center[:, None, :]
         return super()._divide_points_to_space_variables(points.reshape(-1, 2))
 
     def sample_grid(self, n=None, d=None, **params):
-        circle_params = self._domain_construction(**params)
+        center, radius = self.domain._compute_center_and_radius(**params)
+        num_of_params = self.get_num_of_params(**params)
         grid = torch.linspace(0, 2*np.pi, n+1)[:-1] # last one would be double
-        phi = grid.repeat(circle_params['param_len']).view(circle_params['param_len'], n, 1) 
-        points = torch.cat((torch.multiply(circle_params['radius'], torch.cos(phi)),
-                            torch.multiply(circle_params['radius'], torch.sin(phi))), 
+        phi = grid.repeat(num_of_params).view(num_of_params, n, 1) 
+        points = torch.cat((torch.multiply(radius, torch.cos(phi)),
+                            torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
-        points += circle_params['center'][:, None, :]
+        points += center[:, None, :]
         return super()._divide_points_to_space_variables(points.reshape(-1, 2))
 
     def normal(self, points, **params):
-        circle_params = self._domain_construction(**params, **points)
+        center, radius = self.domain._compute_center_and_radius(**params, **points)
         points = self._return_space_variables_to_point_list(points)
-        normal = points - circle_params['center']
-        return torch.divide(normal[:, None], circle_params['radius']).reshape(-1, 2)
+        normal = points - center
+        return torch.divide(normal[:, None], radius).reshape(-1, 2)
+
+    def volume(self, **params):
+        radius = self.radius(**params)
+        volume = 2 * np.pi * radius
+        return volume.reshape(-1, 1)

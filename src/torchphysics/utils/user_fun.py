@@ -1,7 +1,10 @@
 import inspect
-import numpy as np
+import copy 
+import torch
+
 
 class UserFunction:
+
     def __new__(cls, fun):
         if isinstance(fun, cls):
             return fun
@@ -9,7 +12,12 @@ class UserFunction:
 
     def __init__(self, fun):
         self.fun = fun
+        self.defaults = {}
+        self.args = {}
+        if callable(self.fun):
+            self.set_input_args_for_function()
 
+    def set_input_args_for_function(self):
         f_args = inspect.getfullargspec(self.fun).args
 
         # we check that the function defines all needed parameters
@@ -36,7 +44,7 @@ class UserFunction:
         if not f_kwonlydefaults is None:
             self.defaults.update(f_kwonlydefaults)
 
-    def __call__(self,  vectorize=False, **args):
+    def __call__(self, vectorize=False, **args):
         # check that every necessary arg is given
         for key in self.necessary_args:
             assert key in args, \
@@ -45,9 +53,19 @@ class UserFunction:
         inp = {key: args[key] for key in self.args if key in args}
         inp.update({key: self.defaults[key] for key in self.args if key not in args})
         if not vectorize:
-            return self.fun(**inp)
+            return self.evaluate_function(**inp)
         else:
             return self.apply_to_batch(inp)
+
+    def evaluate_function(self, **inp):
+        if callable(self.fun):
+            return self.fun(**inp)[:, None]
+        else:
+            if isinstance(self.fun, torch.Tensor):
+                return self.fun
+            else: 
+                return torch.tensor(self.fun).float()
+
 
     def apply_to_batch(self, inp):
         # apply the function to a batch of elements by running a for-loop
@@ -66,6 +84,15 @@ class UserFunction:
             o = self.fun(**inp_i)
             if o is not None:
                 out.append(o)
+
+    def partially_evaluate(self, **args):
+        if callable(self.fun):
+            if all(arg in args for arg in self.necessary_args):
+                return self.fun(**args)
+            else:
+                # to avoid manipulation of given param obj, we create a copy
+                return copy.deepcopy(self.fun).set_default(**args)
+        return self.fun
 
     def __name__(self):
         return self.func.__name__
