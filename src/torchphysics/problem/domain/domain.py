@@ -1,30 +1,31 @@
 import abc
 import torch
-import copy 
 
 from ...utils.user_fun import UserFunction
 
 
 class Domain:
 
-    def __init__(self, constructor, params, space, dim=None):
+    def __init__(self, space, dim=None):
         self.space = space
         if dim is None:
             self.dim = self.space.dim
         else:
             self.dim = dim
 
-        self.constructor = constructor
-        self.params = params
-
+    def set_necessary_variables(self, *domain_params):
         # create a set of variables/spaces that this domain needs to be properly defined
         self.necessary_variables = set()
-        for key in self.params:
-            if callable(self.params[key]):
-                self.params[key] = UserFunction(params[key])
-                for k in self.params[key].necessary_args:
-                    self.necessary_variables.add(k)
+        for d_param in domain_params:
+            for k in d_param.necessary_args:
+                self.necessary_variables.add(k)
         assert not any(var in self.necessary_variables for var in self.space)
+
+    def transform_to_user_functions(self, *domain_params):
+        out = []
+        for d_param in domain_params:
+            out.append(UserFunction(d_param))
+        return tuple(out)
 
     @property
     def boundary(self):
@@ -34,6 +35,9 @@ class Domain:
     @property
     def inner(self):
         # open domain
+        raise NotImplementedError
+
+    def volume(self, **params):
         raise NotImplementedError
 
     def __add__(self, other):
@@ -195,59 +199,27 @@ class Domain:
         return torch.column_stack(point_list)
 
     def __call__(self, **data):
-        """
-        (Partially) evaluate given lambda functions.
-        """
-        evaluated_params = {}
-        for key in self.params:
-            evaluated_params[key] = self._call_param(self.params[key], data)
-        if all(var in data for var in self.necessary_variables):
-            return self.constructor(space=self.space, **evaluated_params)
-        else:
-            self.params = evaluated_params
-            return self
+        raise NotImplementedError
 
-    def _call_param(self, param, args):
-        if callable(param):
-            if all(arg in args for arg in param.necessary_args):
-                return param(**args)
-            else:
-                # to avoid manipulation of given param obj, we create a copy
-                copy.deepcopy(param).set_default(**args)
-        return param
-
-    def _domain_construction(self, **args):
-        # first find number of parameters:
-        args_len = 1
-        if len(args) > 0:
-            args_len = len(list(args.values())[0])
-        d_params = {'param_len': args_len}
-        # evaluate possible domain values that are dependent on the input args
-        for key, domain_param in self.params.items():
-            if callable(domain_param):
-                d_params[key] = domain_param(**args)[:, None] 
-            else:
-                if isinstance(domain_param, torch.Tensor):
-                    d_params[key] = domain_param
-                else: 
-                    d_params[key] = torch.tensor(domain_param).float()
-        return d_params
+    def get_num_of_params(self, **params):
+        # finds the number of params, for which points should be sampled
+        num_of_params = 1
+        if len(params) > 0:
+            num_of_params = len(list(params.values())[0])
+        return num_of_params
 
 
 class BoundaryDomain(Domain):
     
     def __init__(self, domain):
         assert isinstance(domain, Domain)
-        super().__init__(space=domain.space, dim=domain.dim-1,
-                         constructor=None, params={})
+        super().__init__(space=domain.space, dim=domain.dim-1)
         self.domain = domain
+        self.necessary_variables = self.domain.necessary_variables
 
     def __call__(self, **data):
         evaluate_domain = self.domain(**data)
         return evaluate_domain.boundary
-
-    def _domain_construction(self, **params):
-        return self.domain._domain_construction(**params)
 
     def bounding_box(self, **params):
         return self.domain.bounding_box(**params)
