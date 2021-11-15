@@ -51,7 +51,7 @@ class Domain:
         """
         if self.space != other.space:
             raise ValueError("""united domains should lie in the same space.""")
-        from .newdomainoperations import UnionDomain
+        from .domainoperations.union import UnionDomain
         return UnionDomain(self, other)
 
     def __sub__(self, other):
@@ -65,7 +65,7 @@ class Domain:
         """
         if self.space != other.space:
             raise ValueError("""complemented domains should lie in the same space.""")
-        from .newdomainoperations import CutDomain
+        from .domainoperations.cut import CutDomain
         return CutDomain(self, other)
 
     def __and__(self, other):
@@ -79,7 +79,7 @@ class Domain:
         """
         if self.space != other.space:
             raise ValueError("""Intersected domains should lie in the same space.""")
-        from .newdomainoperations import IntersectionDomain
+        from .domainoperations.intersection import IntersectionDomain
         return IntersectionDomain(self, other)
 
     def __mul__(self, other):
@@ -91,7 +91,7 @@ class Domain:
             The other domain to create the cartesian product with.
             Should lie in a disjoint space.
         """
-        from .newdomainoperations import ProductDomain
+        from .domainoperations.product import ProductDomain
         return ProductDomain(self, other)
 
     def __contains__(self, points):
@@ -112,7 +112,7 @@ class Domain:
         return self._contains(points)
 
     @abc.abstractmethod
-    def contains(self, points, **params):
+    def _contains(self, points, **params):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -159,6 +159,26 @@ class Domain:
         if len(params) > 0:
             num_of_params = len(list(params.values())[0])
         return num_of_params
+
+    def compute_n_from_density(self, d, **params):
+        volume = self.volume(**params)
+        if len(volume) > 1:
+            raise ValueError(f"""Sampling with a density is only possible for one
+                                given pair of parameters. Found {len(volume)} 
+                                different pairs. If sampling with a density is needed, 
+                                a loop should be used.""")
+        n = torch.ceil(volume / d**self.dim)
+        return int(n)
+
+    def _repeat_params(self, n, **args):
+        repeated_params = {}
+        param_len = 1
+        for key, domain_param in args.items():
+            repeated_params[key] = torch.repeat_interleave(domain_param, n, dim=0)
+            param_len = len(repeated_params[key])
+        if param_len > 1:
+            n = 1
+        return n, repeated_params
 
 
 class BoundaryDomain(Domain):

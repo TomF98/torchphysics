@@ -1,6 +1,6 @@
 import torch
 
-from .domain import Domain
+from ..domain import Domain
 
 
 class Point(Domain):
@@ -24,7 +24,7 @@ class Point(Domain):
         new_point = self.point.partially_evaluate(**data)
         return Point(space=self.space, point=new_point)
 
-    def __contains__(self, points, **params):
+    def _contains(self, points, **params):
         point_params = self.point(**params, **points)
         points = self.space.as_tensor(points)
         inside = torch.isclose(points[:, None], point_params)
@@ -61,6 +61,8 @@ class Point(Domain):
         return bounds
 
     def sample_random_uniform(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
         point_params = self.point(**params)
         points = torch.ones((self.get_num_of_params(**params), n, self.space.dim))
         points *= point_params

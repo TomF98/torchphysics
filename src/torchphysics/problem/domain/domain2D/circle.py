@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from .domain import Domain, BoundaryDomain
+from ..domain import Domain, BoundaryDomain
 
 
 class Circle(Domain):
@@ -29,10 +29,10 @@ class Circle(Domain):
         new_radius = self.radius.partially_evaluate(**data)
         return Circle(space=self.space, center=new_center, radius=new_radius)
 
-    def __contains__(self, points, **params):
+    def _contains(self, points, **params):
         center, radius = self._compute_center_and_radius(**params, **points)
         points = self.space.as_tensor(points)
-        norm = torch.norm(points - center, dim=1).reshape(-1, 1)
+        norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.le(norm[:, None], radius).reshape(-1, 1)
 
     def bounding_box(self, **params):
@@ -46,6 +46,8 @@ class Circle(Domain):
         return bounds
 
     def sample_random_uniform(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
         center, radius = self._compute_center_and_radius(**params)
         num_of_params = self.get_num_of_params(**params)
         r = torch.sqrt(torch.rand((num_of_params, n, 1)))
@@ -58,6 +60,8 @@ class Circle(Domain):
         return self.space.embed(points.reshape(-1, 2))
 
     def sample_grid(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
         center, radius = self._compute_center_and_radius(**params)
         num_of_params = self.get_num_of_params(**params)
         grid = self._equidistant_points_in_circle(n)
@@ -98,13 +102,15 @@ class CircleBoundary(BoundaryDomain):
         assert isinstance(domain, Circle)
         super().__init__(domain)
 
-    def __contains__(self, points, **params):
+    def _contains(self, points, **params):
         center, radius = self.domain._compute_center_and_radius(**params, **points)
         points = self.space.as_tensor(points)
-        norm = torch.norm(points - center, dim=1).reshape(-1, 1)
+        norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
     def sample_random_uniform(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
         center, radius = self.domain._compute_center_and_radius(**params)
         phi = 2 * np.pi * torch.rand((self.get_num_of_params(**params), n, 1))
         points = torch.cat((torch.multiply(radius, torch.cos(phi)),
@@ -114,6 +120,8 @@ class CircleBoundary(BoundaryDomain):
         return self.space.embed(points.reshape(-1, 2))
 
     def sample_grid(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
         center, radius = self.domain._compute_center_and_radius(**params)
         num_of_params = self.get_num_of_params(**params)
         grid = torch.linspace(0, 2*np.pi, n+1)[:-1] # last one would be double
@@ -131,6 +139,6 @@ class CircleBoundary(BoundaryDomain):
         return torch.divide(normal[:, None], radius).reshape(-1, 2)
 
     def volume(self, **params):
-        radius = self.radius(**params)
+        radius = self.domain.radius(**params)
         volume = 2 * np.pi * radius
         return volume.reshape(-1, 1)

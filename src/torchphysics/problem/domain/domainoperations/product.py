@@ -2,8 +2,10 @@ import collections
 import torch
 import warnings
 
-from .domain import Domain
-from .newdomain0D import Point
+from ..domain import BoundaryDomain, Domain
+from ..newdomain0D import Point
+from .union import UnionDomain
+
 
 class ProductDomain(Domain):
 
@@ -17,8 +19,7 @@ class ProductDomain(Domain):
         self._check_variable_dependencies()
         # set domain params
         space = self.domain_a.space * self.domain_b.space
-        super().__init__(space=space, constructor=None, params={},
-                         dim=domain_a.dim + domain_b.dim)
+        super().__init__(space=space, dim=domain_a.dim + domain_b.dim)
         
         # necessary variables consist of variables for both domains
         self.necessary_variables = domain_a.necessary_variables.copy()
@@ -110,9 +111,9 @@ class ProductDomain(Domain):
         """
         return ProductDomain(self.domain_a & other, self.domain_b & other)
 
-    def __contains__(self, points, **params):
-        in_a = self.domain_a.__contains__(points, **params)
-        in_b = self.domain_b.__contains__(points, **params)
+    def _contains(self, points, **params):
+        in_a = self.domain_a._contains(points, **params)
+        in_b = self.domain_b._contains(points, **params)
         return torch.logical_and(in_a, in_b)
 
     def bounding_box(self, **params):
@@ -129,59 +130,3 @@ class ProductDomain(Domain):
         b_points = self.domain_b.sample_random_uniform(n=n, d=d, **new_params) 
         a_points = self.domain_a.sample_random_uniform(n=1, d=d, **new_params, **b_points)
         return {**a_points, **b_points}
-
-    def _repeat_params(self, n, **args):
-        repeated_params = {}
-        param_len = 1
-        for key, domain_param in args.items():
-            repeated_params[key] = torch.repeat_interleave(domain_param, n, dim=0)
-            param_len = len(repeated_params[key])
-        if param_len > 1:
-            n = 1
-        return n, repeated_params
-
-
-"""
-Classes for boolean domains
-"""
-
-class UnionDomain(Domain):
-    
-    def __init__(self, domain_a, domain_b):
-        assert domain_a.space == domain_b.space
-        self.domain_a = domain_a
-        self.domain_b = domain_b
-        super().__init__(constructor=None, params={}, 
-                         space=domain_a.space, dim=domain_a.dim)
-
-    def __contains__(self, points, **params):
-        in_a = self.domain_a.__contains__(points, **params)
-        in_b = self.domain_b.__contains__(points, **params)
-        return torch.logical_or(in_a, in_b)
-
-    def __call__(self, **data):
-        domain_a = self.domain_a(**data)
-        domain_b = self.domain_b(**data)
-        return UnionDomain(domain_a, domain_b)
-
-    def bounding_box(self, **params):
-        bounds_a = self.domain_a.bounding_box(**params)
-        bounds_b = self.domain_b.bounding_box(**params)
-        bounds = []
-        for i in range(self.space.dim):
-            bounds.append(min([bounds_a[2*i], bounds_b[2*i]]))
-            bounds.append(max([bounds_a[2*i+1], bounds_b[2*i+1]]))
-        return bounds
-
-    def sample_random_uniform(self, n=None, d=None, **params):
-        points_a = self.domain_a.sample_random_uniform(n=n, d=d, **params)
-        points_b = self.domain_b.sample_random_uniform(n=n, d=d, **params)
-        in_a = self.domain_a.__contains__(points=points_b, **params)
-        return super().sample_random_uniform(n=n, d=d, **params)
-
-class CutDomain(Domain):
-    pass
-
-
-class IntersectionDomain(Domain):
-    pass
