@@ -6,7 +6,7 @@ import abc
 import torch
 import numpy as np
 
-from ..utils import (normal_derivative,
+from ...utils import (normal_derivative,
                      prepare_user_fun_input,
                      apply_to_batch,
                      is_batch)

@@ -4,8 +4,8 @@ import torch
 import numpy as np
 
 from .problem.problem import Problem
-from .problem.spaces import Space, R1
-from .problem.parameters.parameter import ParameterSub
+from .problem.space.space import Space, R1
+from .models.parameters.parameter import ParameterSub
 
 
 class SimpleDataset(torch.utils.data.Dataset):

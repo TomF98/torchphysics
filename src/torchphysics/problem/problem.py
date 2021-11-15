@@ -1,6 +1,6 @@
 import abc
 
-from .condition import Condition
+from .conditions.condition import Condition
 
 
 class Problem():
