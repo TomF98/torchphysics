@@ -10,5 +10,4 @@ from .explicit_samplers import (GridSampler,
                                 GaussianSampler, 
                                 LHSSampler)
 
-
 from .plot_sampler import PlotSampler

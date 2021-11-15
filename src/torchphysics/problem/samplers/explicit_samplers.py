@@ -4,8 +4,8 @@ import numpy as np
 import numbers
 
 from .sampler_base import DataSampler
-from ..domain.domain import BoundaryDomain
-from ..domain.domain1D import Interval
+from ..domains.domain import BoundaryDomain
+from ..domains.domain1D import Interval
 
 
 class GridSampler(DataSampler):

@@ -4,8 +4,8 @@ import numpy as np
 import torch
 import numbers
 
-from ..domain.domain import BoundaryDomain
-from ..domain import Interval
+from ..domains.domain import BoundaryDomain
+from ..domains import Interval
 from .sampler_base import DataSampler
 from .explicit_samplers import GridSampler
 
