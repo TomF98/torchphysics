@@ -1,8 +1,8 @@
 import sys
-from .problem import spaces as spaces
-from .problem import domains as domains
-from .problem import samplers as samplers
-from .problem import conditions as conditions
+from .problem import spaces
+from .problem import domains
+from .problem import samplers
+from .problem import conditions
 
 if sys.version_info[:2] >= (3, 8):
     # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
