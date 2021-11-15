@@ -1,6 +1,6 @@
 import torch
 
-from .domain import Domain
+from ..domain import Domain
 
 
 class Point(Domain):

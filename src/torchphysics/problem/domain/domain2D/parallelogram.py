@@ -1,147 +1,6 @@
 import torch
-import numpy as np
 
-from .domain import Domain, BoundaryDomain
-
-
-class Circle(Domain):
-    """Class for circles.
-
-    Parameters
-    ----------
-    space : Space
-        The space in which this object lays.
-    center : array_like or callable
-        The center of the circle, e.g. center = [5,0].
-    radius : number or callable
-        The radius of the circle.
-    """   
-    def __init__(self, space, center, radius):
-        assert space.dim == 2
-        center, radius = self.transform_to_user_functions(center, radius)
-        self.center = center
-        self.radius = radius
-        super().__init__(space=space, dim=2)
-        self.set_necessary_variables(self.radius, self.center)
-
-    def __call__(self, **data):
-        new_center = self.center.partially_evaluate(**data)
-        new_radius = self.radius.partially_evaluate(**data)
-        return Circle(space=self.space, center=new_center, radius=new_radius)
-
-    def _contains(self, points, **params):
-        center, radius = self._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
-        norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
-        return torch.le(norm[:, None], radius).reshape(-1, 1)
-
-    def bounding_box(self, **params):
-        center, radius = self._compute_center_and_radius(**params)
-        bounds = []
-        for i in range(self.dim):
-            i_min = torch.min(center[:, i] - radius)
-            i_max = torch.max(center[:, i] + radius)
-            bounds.append(i_min.item())
-            bounds.append(i_max.item())
-        return bounds
-
-    def sample_random_uniform(self, n=None, d=None, **params):
-        if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
-        r = torch.sqrt(torch.rand((num_of_params, n, 1)))
-        r *= radius
-        phi = 2 * np.pi * torch.rand((num_of_params, n, 1))
-        points = torch.cat((torch.multiply(r, torch.cos(phi)),
-                            torch.multiply(r, torch.sin(phi))), dim=2)
-        # [:,None,:] is needed so that the correct entries will be added
-        points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
-
-    def sample_grid(self, n=None, d=None, **params):
-        if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
-        grid = self._equidistant_points_in_circle(n)
-        grid = grid.repeat(num_of_params, 1).view(num_of_params, n, 2) 
-        points = torch.multiply(radius, grid)
-        points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
-
-    def _compute_center_and_radius(self, **params):
-        center = self.center(**params).reshape(-1, 2)
-        radius = self.radius(**params)
-        return center,radius
-
-    def _equidistant_points_in_circle(self, n):
-        # use a sunflower seed arrangement:
-        # https://demonstrations.wolfram.com/SunflowerSeedArrangements/
-        gr = (np.sqrt(5) + 1)/2.0 # golden ratio
-        points = torch.arange(1, n+1)
-        phi = (2 * np.pi / gr) * points
-        radius = torch.sqrt(points - 0.5) / np.sqrt(n - 0.5) 
-        points = torch.column_stack((torch.multiply(radius, torch.cos(phi)),
-                                     torch.multiply(radius, torch.sin(phi))))
-        return points                             
-
-    def _get_volume(self, **params):
-        radius = self.radius(**params)
-        volume = np.pi * radius**2
-        return volume.reshape(-1, 1)
-
-    @property
-    def boundary(self):
-        return CircleBoundary(self)
-
-
-class CircleBoundary(BoundaryDomain):
-
-    def __init__(self, domain):
-        assert isinstance(domain, Circle)
-        super().__init__(domain)
-
-    def _contains(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
-        norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
-        return torch.isclose(norm[:, None], radius).reshape(-1, 1)
-
-    def sample_random_uniform(self, n=None, d=None, **params):
-        if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self.domain._compute_center_and_radius(**params)
-        phi = 2 * np.pi * torch.rand((self.get_num_of_params(**params), n, 1))
-        points = torch.cat((torch.multiply(radius, torch.cos(phi)),
-                            torch.multiply(radius, torch.sin(phi))), 
-                            dim=2)
-        points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
-
-    def sample_grid(self, n=None, d=None, **params):
-        if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self.domain._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
-        grid = torch.linspace(0, 2*np.pi, n+1)[:-1] # last one would be double
-        phi = grid.repeat(num_of_params).view(num_of_params, n, 1) 
-        points = torch.cat((torch.multiply(radius, torch.cos(phi)),
-                            torch.multiply(radius, torch.sin(phi))), 
-                            dim=2)
-        points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
-
-    def normal(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
-        normal = points - center
-        return torch.divide(normal[:, None], radius).reshape(-1, 2)
-
-    def _get_volume(self, **params):
-        radius = self.domain.radius(**params)
-        volume = 2 * np.pi * radius
-        return volume.reshape(-1, 1)
+from ..domain import Domain, BoundaryDomain
 
 
 class Parallelogram(Domain):
@@ -186,7 +45,7 @@ class Parallelogram(Domain):
                 return domain_param[0, :]
         return domain_param
 
-    def _get_volume(self, **params):
+    def volume(self, **params):
         _, _, _, dir_1, dir_2 = self._construct_parallelogram(**params)
         # volume equals the determinate of the matrix [dir_1, dir_2]
         volume = dir_1[:, :1] * dir_2[:, 1:] - dir_1[:, 1:] * dir_2[:, :1]
@@ -245,6 +104,39 @@ class Parallelogram(Domain):
         points += origin[:, None, :]
         return self.space.embed(points.reshape(-1, 2))
 
+    def sample_grid(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
+        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(**params)
+        bary_coords = self._compute_barycentric_grid(n, dir_1, dir_2)
+        if not d: 
+            # if the number of points is specified we have to be sure to sample
+            # the right amount 
+            bary_coords = self._grid_enough_points(n, bary_coords)
+        points_in_dir_1 = bary_coords[:, :1] * dir_1
+        points_in_dir_2 = bary_coords[:, 1:] * dir_2
+        points = points_in_dir_1 + points_in_dir_2
+        points += origin
+        return self.space.embed(points)
+
+    def _compute_barycentric_grid(self, n, dir_1, dir_2):
+        side_length_1 = torch.linalg.norm(dir_1, dim=1)
+        side_length_2 = torch.linalg.norm(dir_2, dim=1)
+        # scale the number of point w.r.t. the 'form' of the parallelogram
+        n_1 = int(torch.sqrt(n*side_length_1/side_length_2))
+        n_2 = int(torch.sqrt(n*side_length_2/side_length_1))
+        x = torch.linspace(0, 1, n_1+2)[1:-1] # create inner grid, so remove
+        y = torch.linspace(0, 1, n_2+2)[1:-1] # first and last value
+        bary_coords = torch.stack(torch.meshgrid((x, y))).T.reshape(-1, 2)
+        return bary_coords
+
+    def _grid_enough_points(self, n, bary_coords): 
+        # if not enough points, add some random ones.
+        if len(bary_coords) < n:
+            random_points = torch.rand((n - len(bary_coords), 2))
+            bary_coords = torch.cat((bary_coords, random_points), dim=0)
+        return bary_coords
+
     @property
     def boundary(self):
         return ParallelogramBoundary(self)
@@ -272,7 +164,7 @@ class ParallelogramBoundary(BoundaryDomain):
         close_to_1 = torch.isclose(bary_coord1, torch.tensor(1.0))
         return torch.logical_and(torch.logical_or(close_to_1, close_to_0), between_0_1)
 
-    def _get_volume(self, **params):
+    def volume(self, **params):
         _, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
         side_length1 = torch.linalg.norm(dir_1, dim=1)
         side_length2 = torch.linalg.norm(dir_2, dim=1)
@@ -282,15 +174,55 @@ class ParallelogramBoundary(BoundaryDomain):
         if d:
             n = self.compute_n_from_density(d, **params)
         origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
-        side_length1 = torch.linalg.norm(dir_1, dim=1)
-        side_length2 = torch.linalg.norm(dir_2, dim=1)
-        total_length = 2 * (side_length1 + side_length2)
+        side_1, side_2, total_length = self._compute_side_length(dir_1, dir_2)
         num_of_params = self.get_num_of_params(**params)
-        b_parameterization = torch.rand((num_of_params, n, 1))
         points = torch.zeros((num_of_params, n, 2))
-
-        points += origin
+        bound_location = torch.rand((num_of_params, n, 1)) * total_length
+        self._transform_interval_to_boundary(dir_1, dir_2, side_1, side_2, points, 
+                                             bound_location)
+        points += origin[:, None, :]
         return self.space.embed(points.reshape(-1, 2))
+
+    def _compute_side_length(self, dir_1, dir_2):
+        # essentially computes the same as volume, but we need to set the view 
+        # that we can use the computes values for different cases
+        side_length1 = torch.linalg.norm(dir_1, dim=1).view(-1, 1, 1)
+        side_length2 = torch.linalg.norm(dir_2, dim=1).view(-1, 1, 1)
+        total_length = 2 * (side_length1 + side_length2)
+        return side_length1,side_length2,total_length
+
+    def _scale_points_on_side(self, dir, side_length, points, bound_location):
+        scale =  torch.clamp(bound_location/side_length, min=0, max=1)
+        points += scale * dir[:, None]
+        bound_location -= side_length
+
+    def sample_grid(self, n=None, d=None, **params):
+        if d:
+            n = self.compute_n_from_density(d, **params)
+        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
+        side_1, side_2, total_length = self._compute_side_length(dir_1, dir_2)
+        num_of_params = self.get_num_of_params(**params)
+        points = torch.zeros((num_of_params, n, 2))
+        bound_grid = torch.linspace(0, 1, n+1)[:-1] # last point would be double
+        bound_grid = bound_grid.repeat(num_of_params).view(num_of_params, n, 1) 
+        bound_location = bound_grid * total_length
+        self._transform_interval_to_boundary(dir_1, dir_2, side_1, side_2, points, 
+                                             bound_location)
+        points += origin[:, None, :]
+        return self.space.embed(points.reshape(-1, 2))
+
+    def _transform_interval_to_boundary(self, dir_1, dir_2, side_1, side_2,
+                                        points, bound_location):
+        # first we sample points between 0 and the total length of the 
+        # boundary circumference. Now we walk along the boundary and check
+        # if a sampled point has value smaller then the distance we already
+        # walked -> put point on this boundary part.
+        # This idea we apply for all points at the same time, by iterativ 
+        # checking each side. 
+        self._scale_points_on_side(dir_1, side_1, points, bound_location)
+        self._scale_points_on_side(dir_2, side_2, points, bound_location)
+        self._scale_points_on_side(-dir_1, side_1, points, bound_location)
+        self._scale_points_on_side(-dir_2, side_2, points, bound_location)
 
     def normal(self, points, **params):
         origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**points, 
@@ -300,7 +232,7 @@ class ParallelogramBoundary(BoundaryDomain):
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, dir_2)
         normal_dir_1 = self._get_normal_direction(dir_1)
         normal_dir_2 = -self._get_normal_direction(dir_2)
-        # compute for each point how the normal vector should be, by checking the
+        # compute for each point what the normal vector should be, by checking the
         # value of the local barycentric coordinate = 0 or 1
         self._add_local_normal_vector(normals, bary_x, bary_y, normal_dir_1,
                                       normal_dir_2, 0.0)

@@ -1,6 +1,6 @@
 import torch
 
-from .domain import Domain, BoundaryDomain
+from ..domain import Domain, BoundaryDomain
 
 
 class Interval(Domain):
