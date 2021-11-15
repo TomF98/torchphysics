@@ -13,6 +13,15 @@ import warnings
 from .utils.plot import _scatter
 
 
+class Solver(pl.LightningModule):
+    def __init__(self, model, train_conditions, val_conditions):
+        super().__init__()
+        self.model = model
+        self.train_conditions = train_conditions
+        self.val_conditions = val_conditions
+
+
+
 class PINNModule(pl.LightningModule):
     """A LightningModule to solve PDEs using the PINN approach
 
@@ -106,9 +115,17 @@ class PINNModule(pl.LightningModule):
             **self.optim_params)
         if self.scheduler is None:
             return optimizer
-        lr_scheduler = self.scheduler['class'](
-            optimizer, **self.scheduler['args'])
+        lr_scheduler = self._set_lr_scheduler(optimizer=optimizer)
         return [optimizer], [lr_scheduler]
+
+    def _set_lr_scheduler(self, optimizer):
+        lr_scheduler = self.scheduler['class'](optimizer, **self.scheduler['args'])
+        lr_scheduler = {'scheduler': lr_scheduler, 'name': 'learning_rate', 
+                        'interval': 'epoch', 'frequency': 1}
+        for input_name in self.scheduler:
+            if not input_name in ['class', 'args']:
+                lr_scheduler[input_name] = self.scheduler[input_name]
+        return lr_scheduler
 
     def training_step(self, batch, batch_idx):
         # maybe this slows down training a bit

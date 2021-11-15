@@ -25,6 +25,10 @@ class Space(Counter):
     def dim(self):
         return sum(self.values())
     
+    @property
+    def variables(self):
+        return set(self.keys())
+    
 
     def embed(self, points):
         """Divides sample points of the form np.array(number_of_points, self.dim)

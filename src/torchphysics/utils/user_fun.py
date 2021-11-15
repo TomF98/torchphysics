@@ -10,11 +10,11 @@ class UserFunction:
             return fun
         return super(UserFunction, cls).__new__(cls)
 
-    def __init__(self, fun):
+    def __init__(self, fun, defaults={}, args={}):
         self.fun = fun
-        self.defaults = {}
-        self.args = {}
-        if callable(self.fun):
+        self.defaults = defaults
+        self.args = args
+        if callable(self.fun) and self.defaults == {} and self.args == {}:
             self.set_input_args_for_function()
 
     def set_input_args_for_function(self):
