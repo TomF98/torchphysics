@@ -3,7 +3,7 @@ import torch
 import warnings
 
 from ..domain import BoundaryDomain, Domain
-from ..newdomain0D import Point
+from ..domain0D import Point
 from .union import UnionDomain
 from ....utils.user_fun import UserFunction
 
