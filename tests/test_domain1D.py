@@ -1,10 +1,10 @@
 import pytest
 import torch
 
-from torchphysics.problem.domain.domain1D.interval import (Interval,
+from torchphysics.problem.domains.domain1D.interval import (Interval,
                                                            IntervalBoundary, 
                                                            IntervalSingleBoundaryPoint)
-from torchphysics.problem.space.space import R1
+from torchphysics.problem.spaces.space import R1
 
 
 def lower_bound(t):

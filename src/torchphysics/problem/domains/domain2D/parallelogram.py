@@ -45,7 +45,7 @@ class Parallelogram(Domain):
                 return domain_param[0, :]
         return domain_param
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         _, _, _, dir_1, dir_2 = self._construct_parallelogram(**params)
         # volume equals the determinate of the matrix [dir_1, dir_2]
         volume = dir_1[:, :1] * dir_2[:, 1:] - dir_1[:, 1:] * dir_2[:, :1]
@@ -164,7 +164,7 @@ class ParallelogramBoundary(BoundaryDomain):
         close_to_1 = torch.isclose(bary_coord1, torch.tensor(1.0))
         return torch.logical_and(torch.logical_or(close_to_1, close_to_0), between_0_1)
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         _, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
         side_length1 = torch.linalg.norm(dir_1, dim=1)
         side_length2 = torch.linalg.norm(dir_2, dim=1)

@@ -89,6 +89,7 @@ class CutBoundaryDomain(BoundaryDomain):
         on_b_bound = self.domain.domain_b.boundary._contains(points, **params)
         on_a_part = torch.logical_and(on_a_bound, torch.logical_not(in_b))
         on_b_part = torch.logical_and(on_b_bound, in_a)
+        on_b_part = torch.logical_and(on_b_part, torch.logical_not(on_a_bound))
         return torch.logical_or(on_a_part, on_b_part)
 
     def _get_volume(self, **params):
@@ -119,6 +120,8 @@ class CutBoundaryDomain(BoundaryDomain):
         n = self.get_num_of_params(**points)
         _, repeated_params = self._repeat_params(n, **params)
         inside = domain._contains(points, **repeated_params)
+        on_bound = domain.boundary._contains(points, **repeated_params)
+        inside = torch.logical_and(inside, torch.logical_not(on_bound))
         points = self.space.as_tensor(points)
         index = torch.where(inside)[0]
         return points[index]

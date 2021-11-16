@@ -2,8 +2,8 @@ import pytest
 import torch
 import numpy as np
 
-from torchphysics.problem.domain.domain0D.point import Point
-from torchphysics.problem.space.space import R1, R2, R3
+from torchphysics.problem.domains.domain0D.point import Point
+from torchphysics.problem.spaces.space import R1, R2, R3
 
 
 def p(t):

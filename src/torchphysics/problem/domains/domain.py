@@ -45,7 +45,7 @@ class Domain:
 
     def volume(self, **params):
         if self._user_volume is None:
-            return self._get_volume(self, **params)
+            return self._get_volume(**params)
         else:
             return self._user_volume()
 
