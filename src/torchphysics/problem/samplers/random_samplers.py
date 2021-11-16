@@ -33,7 +33,7 @@ class RandomUniformSampler(PointSampler):
             repeated_params = self._repeat_input_params(self.n_points, **params)
             return {**rand_points, **repeated_params}
         else: # density is used
-            sample_function = self.domain.sampler_random_uniform
+            sample_function = self.domain.sample_random_uniform
             if any(var in self.domain.necessary_variables for var in params.keys()):
                 return self._sample_params_dependent(sample_function, **params)
             return self._sample_params_independent(sample_function, **params)
