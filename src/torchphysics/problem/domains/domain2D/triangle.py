@@ -40,7 +40,7 @@ class Triangle(Domain):
                 return domain_param[0, :]
         return domain_param
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         _, _, _, dir_1, _, dir_3 = self._construct_triangle(**params)
         # volume equals the determinate of the matrix [dir_1, dir_2] / 2
         volume = -dir_1[:, :1] * dir_3[:, 1:] + dir_1[:, 1:] * dir_3[:, :1]
@@ -167,7 +167,7 @@ class TriangleBoundary(BoundaryDomain):
         assert isinstance(domain, Triangle)
         super().__init__(domain)
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         _, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(**params)
         side_1, side_2, side_3 = self._compute_side_length(dir_1, dir_2, dir_3)
         side_length = side_1 + side_2 + side_3

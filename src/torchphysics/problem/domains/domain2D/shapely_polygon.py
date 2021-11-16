@@ -48,7 +48,7 @@ class ShapelyPolygon(Domain):
         bounds = self.polygon.bounds
         return [bounds[0], bounds[2], bounds[1], bounds[3]]
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         volume = self.polygon.area
         return torch.tensor(volume).reshape(-1, 1)
 
@@ -186,7 +186,7 @@ class ShapelyBoundary(BoundaryDomain):
             on_bound[i] = (torch.abs(distance) <= self.tol)
         return on_bound.reshape(-1, 1)
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         volume = self.domain.polygon.boundary.length 
         return torch.tensor(volume).reshape(-1, 1)
 

@@ -1,11 +1,11 @@
 import pytest
 import torch
 
-from torchphysics.problem.domain.domain2D.circle import (Circle, CircleBoundary)
-from torchphysics.problem.domain.domain2D.parallelogram import (Parallelogram,
+from torchphysics.problem.domains.domain2D.circle import (Circle, CircleBoundary)
+from torchphysics.problem.domains.domain2D.parallelogram import (Parallelogram,
                                                                 ParallelogramBoundary)
-from torchphysics.problem.domain.domain2D.triangle import (Triangle, TriangleBoundary)
-from torchphysics.problem.space.space import R2
+from torchphysics.problem.domains.domain2D.triangle import (Triangle, TriangleBoundary)
+from torchphysics.problem.spaces.space import R2
 
 def radius(t):
     return t + 1 

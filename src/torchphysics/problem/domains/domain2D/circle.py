@@ -138,7 +138,7 @@ class CircleBoundary(BoundaryDomain):
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 2)
 
-    def volume(self, **params):
+    def _get_volume(self, **params):
         radius = self.domain.radius(**params)
         volume = 2 * np.pi * radius
         return volume.reshape(-1, 1)
