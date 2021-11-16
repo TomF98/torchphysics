@@ -3,7 +3,7 @@ import torch
 import warnings
 
 from ..domain import BoundaryDomain, Domain
-from ..newdomain0D import Point
+from ..domain0D import Point
 from .union import UnionDomain
 from ....utils.user_fun import UserFunction
 
@@ -105,15 +105,15 @@ class ProductDomain(Domain):
             b_points = self.domain_b.sample_random_uniform(n=n, **new_params)
             if len(self.domain_b.necessary_variables) > 0:
                 # points need to be sampled in every call to this function
-                return sum(self.domain_a.volume(**b_points, **new_params))/N_APPROX_VOLUME \
-                    * self.domain_b.volume(**params)
+                return torch.sum(self.domain_a.volume(**b_points, **new_params).reshape(N_APPROX_VOLUME,-1), dim=0)\
+                    / N_APPROX_VOLUME * self.domain_b.volume(**params)
             elif len(self.necessary_variables) > 0:
                 # we can keep the sampled points and evaluate domain_a in a function
                 b_volume = self.domain_b.volume()
                 def avg_volume(**local_params):
                     _, new_params = self._repeat_params(n=N_APPROX_VOLUME, **local_params)
-                    return (sum(self.domain_a.volume(**b_points, **new_params))/N_APPROX_VOLUME \
-                        * b_volume)
+                    return torch.sum(self.domain_a.volume(**b_points, **new_params).reshape(N_APPROX_VOLUME,-1), dim=0)\
+                        / N_APPROX_VOLUME * b_volume
                 args = self.domain_a.necessary_variables - self.domain_b.space.variables
                 self._user_volume = UserFunction(avg_volume, args=args)
                 return avg_volume(**params)
@@ -122,21 +122,55 @@ class ProductDomain(Domain):
                 volume = sum((self.domain_a.volume(**b_points))/N_APPROX_VOLUME \
                     * self.domain_b.volume())
                 self.set_volume(volume)
-                return volume
+                return torch.repeat_interleave(volume, self.get_num_of_params(**params), dim=0)
             
 
     def sample_grid(self, n=None, d=None, **params):
         raise NotImplementedError(
             """Grid sampling on a product domain is not implmented. Use a product sampler
                instead.""")
+    
+    def _sample_uniform_b_points(self, n_in, **params):
+        n_, params = self._repeat_params(n_in, **params)
+        b_points = self.domain_b.sample_random_uniform(n=n_, **params)
+        volumes = self.domain_a.volume(**params, **b_points).squeeze(dim=-1)
+        if list(volumes.shape) == [1]:
+            return n_in, b_points, params
+        print(volumes.shape)
+        filter_ = torch.max(volumes)*torch.rand_like(volumes) < volumes
+        for var in b_points:
+            b_points[var] = b_points[var][filter_,:]
+        for var in params:
+            params[var] = params[var][filter_,:]
+        n_out = list(b_points.values())[0].shape[0]
+        return n_out, b_points, params
 
     def sample_random_uniform(self, n=None, d=None, **params):
-        if n:
-            n, new_params = self._repeat_params(n, **params)
-            b_points = self.domain_b.sample_random_uniform(n=n, **new_params) 
+        if n is not None:
+            if self._is_constant:  # we use all sampled b values
+                n_, new_params = self._repeat_params(n, **params)
+                b_points = self.domain_b.sample_random_uniform(n=n_, **new_params)
+            else:  # use ratio of uniforms to get uniform values in product domain
+                n_points, b_points, new_params = self._sample_uniform_b_points(n, **params)
+                n_sampled = n
+                while n_points != n:
+                    if n_points < n:
+                        n_guess = int((n/n_points-1)*n_sampled)+1
+                        n_out, add_b_points, add_params = self._sample_uniform_b_points(n_guess, **params)
+                        for var in b_points:
+                            b_points[var] = torch.cat((b_points[var], add_b_points[var]), dim=0)
+                        for var in params:
+                            new_params[var] = torch.cat((new_params[var], add_params[var]), dim=0)
+                        n_points += n_out
+                    else:
+                        for var in b_points:
+                            b_points[var] = b_points[var][:n]
+                        for var in params:
+                            new_params[var] = new_params[var][:n]
+                        n_points = n
             a_points = self.domain_a.sample_random_uniform(n=1, **new_params, **b_points)
+            return {**a_points, **b_points}
         else:
             assert d is not None
             n = int(d*self.volume())
-            self.sample_random_uniform(n=n, **params)
-        return {**a_points, **b_points}
+            return self.sample_random_uniform(n=n, **params)
