@@ -6,11 +6,11 @@ import numbers
 
 from ..domains.domain import BoundaryDomain
 from ..domains import Interval
-from .sampler_base import DataSampler
-from .explicit_samplers import GridSampler
+from .sampler_base import PointSampler
+from .grid_samplers import GridSampler
 
 
-class PlotSampler(DataSampler):
+class PlotSampler(PointSampler):
     """A sampler that creates a equidistant point grid over a domain
     (including the boundary). Mostly used for plotting,
     for animations use the AnimationSampler.
