@@ -1,7 +1,5 @@
 """File with samplers that create random distributed points.
 """
-import torch
-
 from .sampler_base import PointSampler
 
 
@@ -37,3 +35,44 @@ class RandomUniformSampler(PointSampler):
             if any(var in self.domain.necessary_variables for var in params.keys()):
                 return self._sample_params_dependent(sample_function, **params)
             return self._sample_params_independent(sample_function, **params)
+
+    def _sample_points_with_filter(self, **params):
+        if self.n_points:
+            point_dict = self._sample_n_points_with_filter(**params)
+        else:
+            # for density sampling, just sample normally and afterwards remove all 
+            # points that are not allowed
+            point_dict = self._sample_points(**params)
+            _ = self._apply_filter(point_dict)
+        return point_dict
+
+    def _sample_n_points_with_filter(self, **params):
+        sample_function = self.domain.sample_random_uniform
+        num_of_params = self._extract_tensor_len_from_dict(params)
+        point_dict = None
+        for i in range(num_of_params):
+            new_points_dict = {}
+            num_of_new_points = 0
+            iterations = 0
+            # we have to make sure to sample for each params exactly n points
+            while num_of_new_points < self.n_points:
+                # sample points
+                new_points, repeated_params = \
+                    self._sample_for_ith_param(sample_function, params, i)
+                new_points.update(repeated_params)
+                # apply filter and save valid points
+                num_of_new_points += self._apply_filter(new_points)
+                new_points_dict =self._set_point_dict(new_points_dict, new_points)
+                iterations += 1
+                self._check_iteration_number(iterations, num_of_new_points)
+            # if to many points were sampled, delete them.
+            self._cut_tensor_to_length_n(new_points_dict)
+            point_dict = self._set_point_dict(point_dict, new_points_dict)
+        return point_dict 
+
+    def _set_point_dict(self, point_dict, new_points_dict):
+        if not point_dict:
+            point_dict = new_points_dict
+        else:
+            self._append_point_dict(point_dict, new_points_dict)
+        return point_dict

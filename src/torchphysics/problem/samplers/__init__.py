@@ -5,3 +5,4 @@ from .sampler_base import (PointSampler, ProductSampler,
 from .random_samplers import RandomUniformSampler
 from .grid_samplers import GridSampler, SpacedGridSampler
 from .plot_samplers import PlotSampler
+from .data_samplers import DataSampler
