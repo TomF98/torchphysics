@@ -34,6 +34,8 @@ class ShapelyPolygon(Domain):
             if callable(vertices):
                 TypeError("""Shapely-Polygons can not use functions as vertices.""")
             self.polygon= s_geo.Polygon(vertices)
+        else:
+            raise ValueError("""Needs either vertices or a shapely polygon as input""")
         self.polygon = s_geo.polygon.orient(self.polygon)
 
     def _contains(self, points, **params):
@@ -107,8 +109,7 @@ class ShapelyPolygon(Domain):
         return points
 
     def sample_grid(self, n=None, d=None, **params):
-        if d:
-            n = self.compute_n_from_density(d, **params)
+        n = self._compute_number_of_points(n, d, params)
         points = self._create_points_in_bounding_box(n)
         points = self._delete_outside(points)
         if not d:
@@ -138,6 +139,7 @@ class ShapelyPolygon(Domain):
 
     def _grid_enough_points(self, n, bary_coords): 
         # if not enough points, add some random ones.
+        points = bary_coords
         if len(bary_coords) < n:
             random_points = self.sample_random_uniform(n=(n - len(bary_coords)))
             points = torch.cat((bary_coords, self.space.as_tensor(random_points)),
@@ -174,7 +176,8 @@ class ShapelyBoundary(BoundaryDomain):
     def __init__(self, domain):
         assert isinstance(domain, ShapelyPolygon)
         super().__init__(domain)
-        self.normal_list = None
+        outline = self.domain.outline()
+        self.normal_list = self._compute_normals(outline)
         self.tol = 1.e-06
 
     def _contains(self, points, **params):
@@ -183,7 +186,7 @@ class ShapelyBoundary(BoundaryDomain):
         for i in range(len(points)):
             point = s_geo.Point(points[i])
             distance = self.domain.polygon.boundary.distance(point)
-            on_bound[i] = (torch.abs(distance) <= self.tol)
+            on_bound[i] = (abs(distance) <= self.tol)
         return on_bound.reshape(-1, 1)
 
     def _get_volume(self, **params):
@@ -245,22 +248,19 @@ class ShapelyBoundary(BoundaryDomain):
     def normal(self, points, **params):
         points = self.space.as_tensor(points)
         outline = self.domain.outline()
-        self._compute_normals(outline)
         index = self._where_on_boundary(points, outline)
         return self.normal_list[index]
 
     def _compute_normals(self, outline):
-        if self.normal_list is not None:
-            # normals were already computed and saved at a other point 
-            return
         face_number = sum([len(corners) for corners in outline])
-        self.normal_list = torch.zeros((face_number, 2))
+        normal_list = torch.zeros((face_number, 2))
         index = 0
         for corners in outline:
             for i in range(len(corners)-1):
                 normal = self._compute_local_normal_vector(corners[i+1], corners[i])
-                self.normal_list[index] = normal
+                normal_list[index] = normal
                 index += 1
+        return normal_list
 
     def _compute_local_normal_vector(self, end_corner, start_corner):
         conect_vector = end_corner - start_corner
@@ -280,9 +280,7 @@ class ShapelyBoundary(BoundaryDomain):
                 for k in not_found:
                     point = s_geo.Point(points[k])
                     distance = line.distance(point)
-                    if torch.abs(torch.tensor(distance)) <= self.tol:
+                    if abs(distance) <= self.tol:
                         index[k] = counter
-                    else:
-                        break
                 counter += 1
         return index

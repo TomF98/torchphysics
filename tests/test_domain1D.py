@@ -65,6 +65,16 @@ def test_interval_contains():
     assert not any(inside[3:])
 
 
+def test_interval_volume():
+    I = Interval(R1('x'), 0, 1)
+    assert I._get_volume() == 1
+
+
+def test_interval_volume_bounds_change():
+    I = Interval(R1('x'), 0, lambda t : t+1)
+    assert all(I._get_volume(t=torch.tensor([[2.], [1]])) == torch.tensor([[3.0], [2.0]]))
+
+
 def test_interval_contains_if_one_bound_changes():
     I = Interval(R1('x'), 0, upper_bound)
     points = torch.tensor([0.5, 0, 7, -2, -0.1]).reshape(-1, 1)
@@ -87,6 +97,18 @@ def test_interval_random_sampling_with_n():
     I = Interval(R1('x'), 0, 1)
     points = I.sample_random_uniform(n=10)
     assert points['x'].shape == (10, 1)
+    assert all(I._contains(points))
+
+
+def test_interval_random_sampling_with_d():
+    I = Interval(R1('x'), 0, 1)
+    points = I.sample_random_uniform(d=0.1)
+    assert all(I._contains(points))
+
+
+def test_interval_grid_sampling_with_d():
+    I = Interval(R1('x'), 0, 1)
+    points = I.sample_grid(d=0.1)
     assert all(I._contains(points))
 
 
@@ -130,6 +152,11 @@ def test_call_interval_boundary():
     assert new_I.domain.upper_bound.fun == 5
 
 
+def test_interval_boundary_volume():
+    I = Interval(R1('x'), 0, 1).boundary
+    assert I._get_volume() == 2
+
+
 def test_interval_boundary_contains():
     I = Interval(R1('x'), 0, 1).boundary
     points = torch.tensor([0, 0, 1, -2, -0.1, 0.5]).reshape(-1, 1)
@@ -151,6 +178,18 @@ def test_interval_boundary_random_sampling_with_n():
     I = Interval(R1('x'), 0, 1).boundary
     points = I.sample_random_uniform(n=10)
     assert points['x'].shape == (10, 1)
+    assert all(I._contains(points))
+
+
+def test_interval_boundary_random_sampling_with_d():
+    I = Interval(R1('x'), 0, 1).boundary
+    points = I.sample_random_uniform(d=0.3)
+    assert all(I._contains(points))
+
+
+def test_interval_boundary_grid_sampling_with_d():
+    I = Interval(R1('x'), 0, 1).boundary
+    points = I.sample_grid(d=0.3)
     assert all(I._contains(points))
 
 
@@ -246,6 +285,12 @@ def test_single_interval_bound_random_sampling_with_n():
     assert all(torch.isclose(points['x'], torch.tensor(0.0)))
 
 
+def test_single_interval_bound_random_sampling_with_d():
+    I = Interval(R1('x'), 0, 4).boundary_left
+    points = I.sample_random_uniform(d=0.1)
+    assert all(torch.isclose(points['x'], torch.tensor(0.0)))
+
+
 def test_single_interval_bound_random_sampling_with_n_moving_bound():
     I = Interval(R1('x'), lower_bound, 4).boundary_left
     points = I.sample_random_uniform(n=25, t=torch.tensor([[1.0], [0.0]]))
@@ -273,3 +318,8 @@ def test_interval_normals_ride_side():
     normals = I.normal({'x': torch.tensor([1, 1.0, 1]).reshape(-1, 1)})
     assert normals.shape == (3, 1)
     assert all(torch.isclose(torch.tensor([[1], [1.0], [1]]), normals))
+
+
+def test_interval_boundary_left_volume():
+    I = Interval(R1('x'), 0, 1).boundary_left
+    assert I._get_volume() == 1
