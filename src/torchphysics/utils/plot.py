@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from matplotlib import cm, colors
 
-from . import prepare_user_fun_input
+from .helper import prepare_user_fun_input
 
 
 class Plotter():
@@ -77,14 +77,14 @@ def _plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
         A Sampler that creates the points that should be used for the
         plot.
     angle : list, optional
-        The view angle for surface plots. Standart angle is [30, 30]
+        The view angle for 3D plots. Standard angle is [30, 30]
     plot_type : str, optional
         Specifies how the output sholud be plotted. If no input is given the method
         will try to use a fitting way to show the data. Implemented types are:
             - 'line' for plots in 1D
             - 'surface_2D' for surface plots, with a 2D-domain
             - 'curve' for a curve in 3D, with a 1D-domain, 
-            - 'quiver_2D' for quiver/vector field plots, with a 2D-domain
+            - 'quiver_2D' for quiver/vector-field plots, with a 2D-domain
             - 'contour_surface' for contour/colormaps, with a 2D-domain
 
     Returns
@@ -101,8 +101,7 @@ def _plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
         return plot_fun(output=output, domain_points=domain_points,
                         point_sampler=point_sampler, angle=angle)
     else:
-        raise NotImplementedError(f"""Plotting for a  
-                                      {np.shape(output)[1]} 
+        raise NotImplementedError(f"""Plotting for a {out_shape[1]} 
                                       dimensional output is not implemented!  
                                       Please specify the output to plot.""")
 
@@ -116,7 +115,7 @@ def _create_plot_output(model, plot_function, point_sampler):
     output = plot_function(**inp)
     if isinstance(output, torch.Tensor):
         output = output.detach().cpu().numpy()
-    # get dimesnion of the output
+    # get dimension of the output
     out_shape = 1
     if len(np.shape(output)) > 1:
         out_shape = np.shape(output)[1] 
@@ -124,7 +123,8 @@ def _create_plot_output(model, plot_function, point_sampler):
 
 
 def _extract_domain_points(input_dic, domain, length):
-    # for the plot the points need to be in a array not a dictionary
+    # for the plot, the points need to be in a array not a dictionary
+    # and are not allowed to be a tensor
     domain_points = np.zeros((length, domain.dim))
     current_dim = 0
     for vname in domain.space:
@@ -173,16 +173,14 @@ def _plot_for_two_outputs(domain_dim):
     elif domain_dim == 2:
         return quiver2D
     else:
-        raise NotImplementedError("""Can't plot 2D-output on given domains""")
+        raise NotImplementedError("""Can't plot 2D-output on given domain""")
 
 
 def surface2D(output, domain_points, point_sampler, angle):
     '''Handels surface plots w.r.t. a two dimensional variable.
-    Inputs are the same as _plot().
     '''
     # For complex domains it is best to triangulate them for the plotting
-    triangulation = _triangulation_of_domain(point_sampler.domain,
-                                             domain_points)
+    triangulation = _triangulation_of_domain(point_sampler.domain, domain_points)
     fig, ax = _create_figure_and_axis(angle)
     _set_x_y_axis_data(point_sampler, ax)
     surf = ax.plot_trisurf(triangulation, output.flatten(),
@@ -194,11 +192,14 @@ def surface2D(output, domain_points, point_sampler, angle):
 
 def line_plot(output, domain_points, point_sampler, angle):
     '''Handels line plots w.r.t. a one dimensional variable.
-    Inputs are the same as _plot().
     '''
     fig = plt.figure()
     ax = fig.add_subplot()
     ax.grid()
+    if len(output.shape) > 1 and output.shape[1] > 1:
+        raise ValueError("""Can't plot a line with a multidimensional output. 
+                            If u want to plot the norm use: torch.linalg.norm inside 
+                            the plot function.""")
     ax.plot(domain_points.flatten(), output.flatten())
     # add a text box for the values of the other variables
     if len(point_sampler.dic_for_other_variables) > 0:
@@ -206,24 +207,6 @@ def line_plot(output, domain_points, point_sampler, angle):
         ax.text(1.05, 0.5, info_string, bbox={'facecolor': 'w', 'pad': 5},
                 transform=ax.transAxes,)
     ax.set_xlabel(list(point_sampler.domain.space.keys())[0])
-    return fig
-
-
-def surface2D_2_variables(output, inp_dic, domain_points, point_sampler, angle):
-    '''Handels surface plots, if the inputs are two intervals
-    '''
-    # Create the plot (we dont need a triangulation, since the plot over two intervalls
-    # will be a rectangle)
-    fig, ax = _create_figure_and_axis(angle)    
-    """
-    surf = ax.plot_surface(axis_1, axis_2, output.reshape(axis_1.shape),
-                           cmap=cm.jet, linewidth=0, antialiased=False)
-    fig.colorbar(surf, shrink=0.4, aspect=5, pad=0.1)
-    _add_textbox(dic_for_other_variables, ax, 1.2, 0.1)
-    ax.set_xlabel(variable_1.name)
-    ax.set_ylabel(variable_2.name)
-    #plt.show()
-    """
     return fig
 
 
@@ -247,7 +230,6 @@ def curve3D(output, domain_points, point_sampler, angle):
 
 def quiver2D(output, domain_points, point_sampler, angle):
     '''Handles quiver/vector field plots w.r.t. a two dimensional variable.
-    Inputs are the same as _plot().
     '''
     # for the colors
     color = np.linalg.norm(output, axis=1)
@@ -261,7 +243,6 @@ def quiver2D(output, domain_points, point_sampler, angle):
     ax = fig.add_subplot()
     ax.grid()
     _set_x_y_axis_data(point_sampler, ax)
-    _outline_domain(point_sampler, ax)
     # create arrows
     ax.quiver(domain_points[:, 0], domain_points[:, 1], output[:, 0], output[:, 1], 
               color=cm.jet(norm(color)),
@@ -278,17 +259,19 @@ def quiver2D(output, domain_points, point_sampler, angle):
 
 def contour_2D(output, domain_points, point_sampler, angle):
     '''Handles colormap/contour plots w.r.t. a two dimensional variable.
-    Inputs are the same as _plot().
     '''
     # Create the plot
     fig = plt.figure()
     ax = fig.add_subplot()
     _set_x_y_axis_data(point_sampler, ax)
     ax.grid()
-    _outline_domain(point_sampler, ax)
     # For complex domains it is best to triangulate them
     triangulation = _triangulation_of_domain(point_sampler.domain,
                                              domain_points)
+    if len(output.shape) > 1 and output.shape[1] > 1:
+        raise ValueError("""Can't plot a surface with a multidimensional output. 
+                            If u want to plot the norm use: torch.linalg.norm inside 
+                            the plot function.""")
     cs = ax.tricontourf(triangulation, output.flatten(), 100, cmap=cm.jet)
     plt.colorbar(cs) 
     # add a text box for the values of the other variables
@@ -321,16 +304,16 @@ def _scatter(plot_variables, data):
 
     Parameters
     ----------
-    plot_variables : Variabale or list of Variables.
-        The main variable(s) over which the points should be visualized.
+    plot_variables : dict
+        The main variable(s) for which the points should be visualized.
     data : dict
-        A dictionary that contains the points for every Variables.
+        A dictionary that contains the points for every Variable.
     """
     axes = []
-    for v in plot_variables:
+    for v in plot_variables.keys():
         axes.extend(torch.chunk(data[v].detach().cpu(), data[v].shape[1], dim=1))
     labels = []
-    for v in plot_variables:
+    for v in plot_variables.keys():
         for _ in range(data[v].shape[1]):
             labels.append(v)
 
@@ -363,18 +346,11 @@ def _triangulation_of_domain(domain, domain_points):
     for t in tess.simplices:
         p = points[t]
         middle_point = 1/3.0 * (p[0] + p[1] + p[2])
-        if domain.is_inside([middle_point]):
+        embed_point = domain.space.embed(torch.tensor([middle_point]))
+        if domain.__contains__(embed_point):
             tri = np.append(tri, [t], axis=0)
 
     return mtri.Triangulation(x=points[:, 0], y=points[:, 1], triangles=tri)
-
-
-def _outline_domain(points_sampler, ax):
-    """Outlines a 2D-domain
-    """
-    poly = points_sampler.domain.outline()
-    for p in poly:
-        ax.plot(p[:, 0], p[:, 1], color='k', linewidth=2, linestyle='--')
 
 
 def _set_x_y_axis_data(point_sampler, ax):
