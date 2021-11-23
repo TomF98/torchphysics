@@ -25,7 +25,9 @@ class Domain:
     def transform_to_user_functions(self, *domain_params):
         out = []
         for d_param in domain_params:
-            out.append(UserFunction(d_param))
+            if not isinstance(d_param, UserFunction):
+                d_param = UserFunction(d_param)
+            out.append(d_param)
         return tuple(out)
 
     @property

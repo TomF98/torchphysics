@@ -27,6 +27,16 @@ def test_get_volume_poly2D_boundary():
     assert P.boundary._get_volume() == 4.0
 
 
+def test_call_poly2D():
+    P = ShapelyPolygon(R2('x'), [[0, 1], [1, 0], [1, 1]])
+    assert P(t=3) == P
+
+
+def test_call_poly2D_boundary():
+    P = ShapelyPolygon(R2('x'), [[0, 1], [1, 0], [1, 1]]).boundary
+    assert P(t=3) == P
+
+
 def test_check_no_input_poly2D():
     with pytest.raises(ValueError):
         _ = ShapelyPolygon(R2('x'))

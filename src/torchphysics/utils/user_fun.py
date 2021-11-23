@@ -93,7 +93,9 @@ class UserFunction:
                 return self.fun(**inp)
             else:
                 # to avoid manipulation of given param obj, we create a copy
-                return copy.deepcopy(self.fun).set_default(**args)
+                copy_self = copy.deepcopy(self)
+                copy_self.set_default(**args)
+                return copy_self
         return self.fun
 
     def __name__(self):
@@ -107,6 +109,14 @@ class UserFunction:
             self.defaults.pop(key)
         for key in kwargs:
             self.defaults.pop(key)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        copy_object = cls.__new__(cls, self.fun)
+        memo[id(self)] = copy_object
+        for k, v in self.__dict__.items():
+            setattr(copy_object, k, copy.deepcopy(v, memo))
+        return copy_object
 
     @property
     def necessary_args(self):

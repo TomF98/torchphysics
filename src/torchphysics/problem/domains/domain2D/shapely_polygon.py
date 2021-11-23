@@ -7,7 +7,7 @@ from .parallelogram import Parallelogram
 
 
 class ShapelyPolygon(Domain):
-    """Class for polygons.
+    """Class for polygons. Uses the shapely-package.
 
     Parameters
     ----------
@@ -37,6 +37,9 @@ class ShapelyPolygon(Domain):
         else:
             raise ValueError("""Needs either vertices or a shapely polygon as input""")
         self.polygon = s_geo.polygon.orient(self.polygon)
+
+    def __call__(self, **data):
+        return self
 
     def _contains(self, points, **params):
         points = self.space.as_tensor(points)
@@ -179,6 +182,9 @@ class ShapelyBoundary(BoundaryDomain):
         outline = self.domain.outline()
         self.normal_list = self._compute_normals(outline)
         self.tol = 1.e-06
+
+    def __call__(self, **data):
+        return self
 
     def _contains(self, points, **params):
         points = self.space.as_tensor(points)
