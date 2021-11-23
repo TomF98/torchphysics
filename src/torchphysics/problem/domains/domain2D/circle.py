@@ -81,7 +81,7 @@ class Circle(Domain):
         gr = (np.sqrt(5) + 1)/2.0 # golden ratio
         points = torch.arange(1, n+1)
         phi = (2 * np.pi / gr) * points
-        radius = torch.sqrt(points - 0.5) / np.sqrt(n - 0.5) 
+        radius = torch.sqrt(points - 0.5) / np.sqrt(n + 0.5) 
         points = torch.column_stack((torch.multiply(radius, torch.cos(phi)),
                                      torch.multiply(radius, torch.sin(phi))))
         return points                             

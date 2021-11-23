@@ -88,10 +88,14 @@ class UserFunction:
     def partially_evaluate(self, **args):
         if callable(self.fun):
             if all(arg in args for arg in self.necessary_args):
-                return self.fun(**args)
+                inp = {key: args[key] for key in self.args if key in args}
+                inp.update({key: self.defaults[key] for key in self.args if key not in args})
+                return self.fun(**inp)
             else:
                 # to avoid manipulation of given param obj, we create a copy
-                return copy.deepcopy(self.fun).set_default(**args)
+                copy_self = copy.deepcopy(self)
+                copy_self.set_default(**args)
+                return copy_self
         return self.fun
 
     def __name__(self):
@@ -105,6 +109,14 @@ class UserFunction:
             self.defaults.pop(key)
         for key in kwargs:
             self.defaults.pop(key)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        copy_object = cls.__new__(cls, self.fun)
+        memo[id(self)] = copy_object
+        for k, v in self.__dict__.items():
+            setattr(copy_object, k, copy.deepcopy(v, memo))
+        return copy_object
 
     @property
     def necessary_args(self):

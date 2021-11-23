@@ -47,6 +47,11 @@ def test_call_point():
     assert called_P.point.fun[1] == 0
 
 
+def test_point_volume():
+    P = Point(R1('x'), 0.0)
+    assert P._get_volume() == 1
+
+
 def test_point_has_no_boundary():
     P = Point(R2('x'), p2)
     with pytest.raises(NotImplementedError):
@@ -131,6 +136,12 @@ def test_point_random_sampling_with_n():
     P = Point(R1('x'), 4)
     points = P.sample_random_uniform(n=25)
     assert points['x'].shape == (25, 1)
+    assert all(torch.isclose(points['x'], torch.tensor(4.0)))
+
+
+def test_point_random_sampling_with_d():
+    P = Point(R1('x'), 4)
+    points = P.sample_random_uniform(d=0.3)
     assert all(torch.isclose(points['x'], torch.tensor(4.0)))
 
 
