@@ -148,10 +148,8 @@ class PointSampler:
         for i in range(num_of_params):
             new_points, repeated_params = self._sample_for_ith_param(sample_function,
                                                                      params, i)
-            if not sample_dict:
-                sample_dict = {**new_points, **repeated_params}
-            else:
-                self._append_point_dict(sample_dict, {**new_points, **repeated_params})
+            sample_dict = self._set_point_dict(sample_dict,
+                                               {**new_points, **repeated_params})
         return sample_dict
 
     def _sample_for_ith_param(self, sample_function, params, i):
@@ -166,6 +164,13 @@ class PointSampler:
         for key in params.keys():
             ith_params[key] = params[key][None, i]
         return ith_params
+
+    def _set_point_dict(self, point_dict, new_points_dict):
+        if not point_dict:
+            point_dict = new_points_dict
+        else:
+            self._append_point_dict(point_dict, new_points_dict)
+        return point_dict
 
     def _append_point_dict(self, sample_dict, new_point_dic):
         for key in sample_dict.keys():

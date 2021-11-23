@@ -493,3 +493,107 @@ def test_plot_sampler_create_points():
     in_C = C._contains(points)
     on_C = C.boundary._contains(points)
     assert all(torch.logical_or(in_C, on_C))
+
+
+## Test Gaussian sampler
+
+def test_gaussian_sampler():
+    I = Interval(R1('t'), 0, 1)
+    ps = GaussianSampler(I, 50, mean=0.2, std=0.1)
+    points = ps.sample_points()
+    assert points['t'].shape == (50, 1)
+    assert all(I.__contains__(points))
+
+
+def test_gaussian_sampler_in_2D():
+    P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
+    ps = GaussianSampler(P, 100, mean=[0.2, 0.3], std=0.1)
+    points = ps.sample_points()
+    assert points['x'].shape == (100, 2)
+    assert all(P.__contains__(points))
+
+
+def test_gaussian_sampler_wrong_domain_type():
+    P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
+    with pytest.raises(AssertionError):
+        _ = GaussianSampler(P.boundary, 50, mean=[0, 0], std=0.2)
+
+
+def test_gaussian_sampler_wrong_mean_dimension():
+    P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
+    with pytest.raises(AssertionError):
+        _ = GaussianSampler(P, 50, mean=torch.tensor([0, 0, 0.3]), std=0.2)
+
+
+def test_gaussian_sampler_product():
+    I = Interval(R1('t'), 0, 1)
+    I_2 = Interval(R1('x'), 0, lambda t : t+1)
+    ps_I = GridSampler(I, n_points=10)
+    ps_I_2 = GaussianSampler(I_2, n_points=20, mean=1, std=0.3)
+    ps = ps_I_2 * ps_I
+    points = ps.sample_points()
+    assert points['x'].shape == (200, 1)
+    assert points['t'].shape == (200, 1)
+    assert all(I_2.__contains__(points))
+
+
+def test_gaussian_sampler_product_in_2D():
+    I = Interval(R1('t'), 0, 1)
+    C = Circle(R2('x'), [0, 0], 2)
+    ps_I = GridSampler(I, n_points=10)
+    ps_I_2 = GaussianSampler(C, n_points=20, mean=[-2, 0], std=0.3)
+    ps = ps_I_2 * ps_I
+    points = ps.sample_points()
+    assert points['x'].shape == (200, 2)
+    assert points['t'].shape == (200, 1)
+    assert all(C.__contains__(points))
+
+
+
+## Test LHS sampler
+
+def test_lhs_sampler():
+    I = Interval(R1('t'), 0, 1)
+    ps = LHSSampler(I, 50)
+    points = ps.sample_points()
+    assert points['t'].shape == (50, 1)
+    assert all(I.__contains__(points))
+
+
+def test_lhs_sampler_in_2D():
+    P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    ps = LHSSampler(P, 100)
+    points = ps.sample_points()
+    assert points['x'].shape == (100, 2)
+    assert all(P.__contains__(points))
+
+
+def test_lhs_sampler_wrong_domain_type():
+    P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
+    with pytest.raises(AssertionError):
+        _ = GaussianSampler(P.boundary, 50, mean=[0, 0], std=0.2)
+
+
+def test_lhs_sampler_product():
+    I = Interval(R1('t'), 0, 1)
+    I_2 = Interval(R1('x'), 0, lambda t : t+1)
+    ps_I = GridSampler(I, n_points=10)
+    ps_I_2 = LHSSampler(I_2, n_points=20)
+    ps = ps_I_2 * ps_I
+    points = ps.sample_points()
+    assert points['x'].shape == (200, 1)
+    assert points['t'].shape == (200, 1)
+    assert all(I_2.__contains__(points))
+
+
+def test_lhs_sampler_product_in_2D():
+    I = Circle(R1('t')*R1('y'), [0,0], 1)
+    C = Circle(R2('x'), [0, 0], 2)
+    ps_I = GridSampler(I, n_points=10)
+    ps_I_2 = LHSSampler(C, n_points=20)
+    ps = ps_I_2 * ps_I
+    points = ps.sample_points()
+    assert points['x'].shape == (200, 2)
+    assert points['t'].shape == (200, 1)
+    assert points['y'].shape == (200, 1)
+    assert all(C.__contains__(points))

@@ -76,6 +76,7 @@ class GridSampler(PointSampler):
     def _resample_grid(self, new_points, num_of_valid_points, sample_func,
                        current_params):
         if num_of_valid_points == self.n_points:
+            # the first grid is already perfect
             return new_points
         elif num_of_valid_points == 0:
             warnings.warn("""First iteration did not find any valid grid points.
