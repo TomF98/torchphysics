@@ -136,7 +136,6 @@ class ProductDomain(Domain):
         volumes = self.domain_a.volume(**params, **b_points).squeeze(dim=-1)
         if list(volumes.shape) == [1]:
             return n_in, b_points, params
-        print(volumes.shape)
         filter_ = torch.max(volumes)*torch.rand_like(volumes) < volumes
         for var in b_points:
             b_points[var] = b_points[var][filter_,:]

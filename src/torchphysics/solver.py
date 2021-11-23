@@ -14,9 +14,11 @@ from .utils.plot import _scatter
 
 
 class Solver(pl.LightningModule):
-    def __init__(self, model, train_conditions, val_conditions):
+    """
+    Handles optimization and metric logging
+    """
+    def __init__(self, train_conditions, val_conditions):
         super().__init__()
-        self.model = model
         self.train_conditions = train_conditions
         self.val_conditions = val_conditions
 

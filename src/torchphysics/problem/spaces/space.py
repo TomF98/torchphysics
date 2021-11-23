@@ -1,9 +1,9 @@
-from collections import Counter
+from collections import Counter, OrderedDict
 
 import torch
 
 
-class Space(Counter):
+class Space(Counter, OrderedDict):
 
     def __init__(self, variables_dims):
         # set counter of variable names and their dimensionalities
@@ -20,6 +20,15 @@ class Space(Counter):
             return (self & space) == space
         else:
             raise TypeError
+    
+    def __getitem__(self, val):
+        if isinstance(val, slice):
+            keys = list(self.keys())
+            new_slice = slice(keys.index(val.start),keys.index(val.stop), val.step)
+            new_keys = keys[new_slice]
+            return Space({k: self[k] for k in new_keys})
+        else:
+            return super().__getitem__(val)
 
     @property
     def dim(self):
@@ -28,56 +37,19 @@ class Space(Counter):
     @property
     def variables(self):
         return set(self.keys())
-    
 
-    def embed(self, points):
-        """Divides sample points of the form np.array(number_of_points, self.dim)
-        to each variable of the given Space.
 
-        Parameters
-        ----------
-        points: list, array
-            The created sample/data points, need to fit the given dimension
+    """
+    Python recipe (see official Python docs) to maintain the insertion order.
+    This way, dimensions with identical variable names will be joined, all
+    other dimensions will be kept in the order of their creation by products
+    or __init__.
+    """
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, dict(OrderedDict(self)))
 
-        Returns
-        -------
-        dict
-            A dictionary containing the input points but split up, to each 
-            variable. E.g Space = R1('x')*R1('y') then the output would be
-            output = {'x': points[:, 0:1], 'y': points[:, 1:2]}
-        """
-        output = {}
-        current_dim = 0
-        for vname in self:
-            v_dim = self[vname]
-            output[vname] = points[:, current_dim:current_dim+v_dim]
-            current_dim += v_dim
-        return output
-
-    def as_tensor(self, point_dic):
-        """Concatenates sample points from a dict back to the form 
-        torch.Tensor(number_of_points, self.dim). Only uses the dict keys
-        that are variables in this space.
-
-        Parameters
-        ----------
-        point_dic: dic
-            The dictionary of points 
-            (most likely created with divide_points_to_space_variables)
-
-        Returns
-        -------
-        points: array
-            the point array of the form np.array(number_of_points, self.dim)
-        """
-        # if the points are not a dictonary just return
-        # (not created with our sampling)
-        if isinstance(point_dic, (list, torch.Tensor)):
-            return point_dic
-        point_list = []
-        for vname in self:
-            point_list.append(point_dic[vname])
-        return torch.column_stack(point_list)
+    def __reduce__(self):
+        return self.__class__, (OrderedDict(self),)
 
 
 class R1(Space):

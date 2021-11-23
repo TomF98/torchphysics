@@ -6,74 +6,121 @@ import abc
 import torch
 import numpy as np
 
-from ...utils import (normal_derivative,
-                     prepare_user_fun_input,
-                     apply_to_batch,
-                     is_batch)
+from ...utils import UserFunction
 
+"""
+TODO: check creation of tensors on correct devices, maybe additional flags
+    are necessary
+"""
 
 class Condition(torch.nn.Module):
     """
-    A Condition that should be fulfilled by the DE solution.
-
-    Conditions can be applied to the boundary or inner part of the DE domain and are a
-    central concept in this library. Their solution can either be enforced during
-    training or tracked during validation.
+    A general condition which should be optimized or tracked.
 
     Parameters
-    ----------
+    -------
     name : str
-        name of this condition (should be unique per condition)
-    norm : torch.nn.Module
-        A Pytorch module which forward pass returns the scalar norm of the difference of
-        two input tensors, and is therefore similar to the implementation of nn.MSELoss.
-        The norm is used for the computation of the conditioning loss/metric.
-    point_sampler: DataSampler
-        A sampler that creates the training/validation points for this condition.
-    weight : float, optional
-        Scalar weight of this condition that is used in the weighted sum for the
-        training loss. Defaults to 1.
-    track_gradients : bool or list of str or list of DiffVariables
-        Whether the gradients w.r.t. the inputs should be tracked.
-        Tracking can be necessary for training of a PDE.
-        If True, all gradients will be tracked.
-        If a list of strings or variables is passed, gradient is tracked
-        only for the variables in the list.
-        If False, no gradients will be tracked.
-    data_plot_variables : bool or tuple
-        The variables which are used to log the used training data in a scatter plot.
-        If False, no plots are created. If True, behaviour is defined in each condition.
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+    track_gradients : bool
+        Whether to track input gradients or not. Helps to avoid tracking the
+        gradients during validation. If a condition is applied during training,
+        the gradients will always be tracked.
     """
 
-    def __init__(self, name, norm, point_sampler, weight=1.0,
-                 track_gradients=True,
-                 data_plot_variables=True):
+    def __init__(self, name=None, weight=1.0, track_gradients=True):
         super().__init__()
         self.name = name
-        self.norm = norm
         self.weight = weight
-        self.point_sampler = point_sampler
         self.track_gradients = track_gradients
-        self.data_plot_variables = data_plot_variables
-
-        # variables are registered when the condition is added to a setting
-        self.setting = None
-
+    
     @abc.abstractmethod
-    def get_data(self):
-        """Creates and returns the data for the given condition."""
-        return
+    def forward(self):
+        """
+        The forward run performed by this condition.
 
-    @abc.abstractmethod
-    def get_data_plot_variables(self):
-        return
+        Returns
+        -------
+        torch.Tensor : the loss which should be minimized or monitored during training
+        """
+        raise NotImplementedError
 
-    def serialize(self):
-        dct = {}
-        dct['name'] = self.name
-        dct['norm'] = self.norm.__class__.__name__
-        dct['weight'] = self.weight
-        return dct
+
+class DataCondition(Condition):
+    """
+    A condition that fits a single given module to data (handed through a PyTorch
+    dataloader).
+
+    Parameters
+    -------
+    module : torch.nn.Module
+        The torch module which should be fitted to data.
+    dataloader : torch.utils.DataLoader
+        A PyTorch dataloader which supplies the iterator to load data-target pairs
+        from some given dataset. Data and target should be handed embedded in input
+        or output spaces, i.e. with the correct dictionarys.
+    norm : torch.nn.Module
+        A torch Module which computes the (scalar) distance of the computed output
+        and the given target, e.g. torch.nn.MSELoss().
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+    """
+    def __init__(self, module, dataloader, norm, name='datacondition', weight=1.0):
+        super().__init__(name=name, weight=weight, track_gradients=False)
+        self.module = module
+        self.iterator = iter(dataloader)
+        self.norm = norm
+
+    def forward(self):
+        x, y = next(self.iterator)
+        return self.norm(self.module(x) - y)
+
+
+class PINNCondition(Condition):
+    """
+    A condition that minimizes the residual of a single module in a differential equation,
+    like it is common in the concept of Physics-Informed Neural Networks (PINNs) [1].
+    
+    Parameters
+    -------
+    module : torch.nn.Module
+        The torch module which should solve the differential equation.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the differential equation.
+    residual_fn : callable
+        A user-defined function that computes the residual from inputs and outputs
+        of the model, e.g. by using utils.differentialoperators
+    norm : torch.nn.Module
+        A torch Module which computes the (scalar) norm of the given residual,
+        e.g. torch.nn.MSELoss().
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+
+    Notes
+    -----
+    ..  [1] M. Raissi, "Physics-informed neural networks: A deep learning framework for
+        solving forward and inverse problems involving nonlinear partial differential
+        equations", Journal of Computational Physics, vol. 378, pp. 686-707, 2019.
+    """
+    def __init__(self, module, sampler, residual_fn, norm, name='pinncondition', weight=1.0):
+        super().__init__(name=name, weight=weight, track_gradients=True)
+        self.module = module
+        self.sampler = sampler
+        self.residual_fn = UserFunction(residual_fn)
+        self.norm = norm
+    
+    def forward(self):
+        x = next(self.sampler)
+        y = self.module(x)  # y is in coords of output space
+        return self.norm(self.residual_fn(**{**y, **x}))
 
 
 class DiffEqCondition(Condition):
@@ -155,52 +202,6 @@ class DiffEqCondition(Condition):
             return None
         else:
             return self.data_plot_variables
-        
-
-class DataCondition(Condition):
-    """
-    A condition that enforces the model to fit a given dataset.
-
-    Parameters
-    ----------
-    data_inp : dict
-        A dictionary containing pairs of variables and data for that variables,
-        organized in numpy arrays or torch tensors of equal length.
-    data_out : array-like
-        The targeted solution values for the data points in data_inp.
-    name : str
-        name of this condition (should be unique per condition)
-    norm : torch.nn.Module
-        A Pytorch module which forward pass returns the scalar norm of the difference of
-        two input tensors, and is therefore similar to the implementation of nn.MSELoss.
-        The norm is used to compute the loss for the deviation of the model from the
-        given data.
-    solution_name : str, optional
-        The output function which should be fitted to the given dataset.
-    weight : float, optional
-        Scalar weight of this condition that is used in the weighted sum for the
-        training loss. Defaults to 1.
-    """
-
-    def __init__(self, data_inp, data_out, name, norm,
-                 solution_name='u', weight=1.0):
-        super().__init__(name, norm, weight, point_sampler=None,
-                         track_gradients=False,
-                         data_plot_variables=False)
-        self.solution_name = solution_name
-        self.data_x = data_inp
-        self.data_u = data_out
-
-    def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.domain.space})
-        return self.norm(u[self.solution_name], data['target'])
-
-    def get_data(self):
-        return {**self.data_x,
-                'target': self.data_u}
-
-    def get_data_plot_variables(self):
-        return None
 
 
 class RestrictionCondition(Condition):

@@ -54,7 +54,7 @@ class SpacedGridSampler(PointSampler):
                           points = x**(exponent)
     """
     def __init__(self, domain, n_points, exponent):
-        assert isinstance(domain, Interval), """The domain has to be a interval!"""
+        assert isinstance(domain, Interval), """The domain has to be an interval!"""
         super().__init__(n_points=n_points)
         self.domain = domain
         self.exponent = exponent

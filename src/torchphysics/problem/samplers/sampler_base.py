@@ -48,6 +48,12 @@ class PointSampler:
         """
         self.length = length
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.sample_points()
+
     def __len__(self):
         if self.n_points:
             return self.n_points
