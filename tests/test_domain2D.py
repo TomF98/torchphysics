@@ -6,6 +6,8 @@ from torchphysics.problem.domains.domain2D.parallelogram import (Parallelogram,
                                                                 ParallelogramBoundary)
 from torchphysics.problem.domains.domain2D.triangle import (Triangle, TriangleBoundary)
 from torchphysics.problem.spaces.space import R2
+from torchphysics.problem.spaces.points import Points
+
 
 def radius(t):
     return t + 1 
@@ -64,26 +66,28 @@ def test_bounding_box_circle_variable_params():
 
 def test_circle_contains():
     C = Circle(R2('x'), [0, 0], 4)
-    points = torch.tensor([[0.0, 0.0], [0, -2], [-0.1, -8], [4.1, 0]])
-    inside = C._contains({'x': points})
+    points = Points(torch.tensor([[0.0, 0.0], [0, -2], [-0.1, -8], [4.1, 0]]), R2('x'))
+    inside = C._contains(points)
     assert all(inside[:2])
     assert not any(inside[2:])
 
 
 def test_circle_contains_if_radius_changes():
     C = Circle(R2('x'), [0, 0], radius)
-    points = torch.tensor([[0.0, 0.0], [0, -2], [4.5, -0.1], [4.1, 0], [-0.1, -8]])
+    points = Points(torch.tensor([[0.0, 0.0], [0, -2], [4.5, -0.1],
+                                  [4.1, 0], [-0.1, -8]]), R2('x'))
     time = torch.tensor([0, 1, 5, 0.1, 1]).reshape(-1, 1)
-    inside = C._contains({'x': points, 't': time})
+    inside = C._contains(points, t=time)
     assert all(inside[:3])
     assert not any(inside[3:])
 
 
 def test_circle_contains_if_both_params_changes():
     C = Circle(R2('x'), center, radius)
-    points = torch.tensor([[0.0, 0.0], [1, 1.5], [-0.1, -8], [4.1, 0], [-0.1, -8]])
+    points = Points(torch.tensor([[0.0, 0.0], [1, 1.5],
+                                  [-0.1, -8], [4.1, 0], [-0.1, -8]]), R2('x'))
     time = torch.tensor([0.1, 1, 5, 0.1, 1]).reshape(-1, 1)
-    inside = C._contains({'x': points, 't': time})
+    inside = C._contains(points, t=time)
     assert all(inside[:2])
     assert not any(inside[2:])
 
@@ -91,20 +95,20 @@ def test_circle_contains_if_both_params_changes():
 def test_circle_random_sampling_with_n():
     C = Circle(R2('x'), [0, 0], 4)
     points = C.sample_random_uniform(n=40)
-    assert points['x'].shape == (40, 2)
-    assert all(torch.linalg.norm(points['x'], dim=1) <= 4.0)
+    assert points[:, 'x'].shape == (40, 2)
+    assert all(torch.linalg.norm(points[:, 'x'], dim=1) <= 4.0)
 
 
 def test_circle_random_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4)
     points = C.sample_random_uniform(d=0.3)
-    assert all(torch.linalg.norm(points['x'], dim=1) <= 4.0)
+    assert all(torch.linalg.norm(points[:, 'x'], dim=1) <= 4.0)
 
 
 def test_circle_random_sampling_with_n_and_variable_radius():
     C = Circle(R2('x'), [0, 0], radius)
     points = C.sample_random_uniform(n=4, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points['x'].shape == (8, 2)
+    assert points[:, 'x'].shape == (8, 2)
     assert all(C._contains(points,
                               t=torch.tensor([0, 0, 0, 0, 1, 1, 1, 1]).reshape(-1, 1)))
 
@@ -112,7 +116,7 @@ def test_circle_random_sampling_with_n_and_variable_radius():
 def test_circle_random_sampling_with_n_and_variable_radius_and_center():
     C = Circle(R2('x'), center, radius)
     points = C.sample_random_uniform(n=4, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points['x'].shape == (8, 2)
+    assert points[:, 'x'].shape == (8, 2)
     assert all(C._contains(points,
                               t=torch.tensor([0, 0, 0, 0, 1, 1, 1, 1]).reshape(-1, 1)))
 
@@ -120,20 +124,20 @@ def test_circle_random_sampling_with_n_and_variable_radius_and_center():
 def test_circle_grid_sampling_with_n():
     C = Circle(R2('x'), [0, 0], 4)
     points = C.sample_grid(n=40)
-    assert points['x'].shape == (40, 2)
-    assert all(torch.linalg.norm(points['x'], dim=1) <= 4.0)
+    assert points[:, 'x'].shape == (40, 2)
+    assert all(torch.linalg.norm(points[:, 'x'], dim=1) <= 4.0)
 
 
 def test_circle_grid_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4)
     points = C.sample_grid(d=1)
-    assert all(torch.linalg.norm(points['x'], dim=1) <= 4.0)
+    assert all(torch.linalg.norm(points[:, 'x'], dim=1) <= 4.0)
 
 
 def test_circle_grid_sampling_with_n_and_variable_radius_and_center():
     C = Circle(R2('x'), center, radius)
     points = C.sample_grid(n=3, t=torch.tensor([0, 1, 2]).reshape(-1, 1))
-    assert points['x'].shape == (9, 2)
+    assert points[:, 'x'].shape == (9, 2)
     assert all(C._contains(points,
                               t=torch.tensor([0, 0, 0, 1, 1, 1, 2.0, 2, 2]).reshape(-1, 1)))
 
@@ -156,17 +160,18 @@ def test_call_circle_boundary():
 
 def test_circle_boundary_contains():
     C = Circle(R2('x'), [0, 0], 4).boundary
-    points = torch.tensor([[0, 4], [0, -4], [-0.1, 0.5], [-1, -5]])
-    inside = C._contains({'x': points})
+    points = Points(torch.tensor([[0, 4], [0, -4], [-0.1, 0.5], [-1, -5]]), R2('x'))
+    inside = C._contains(points)
     assert all(inside[:2])
     assert not any(inside[2:])
 
 
 def test_circle_boundary_contains_if_params_change():
     C = Circle(R2('x'), [0, 0], radius).boundary
-    points = torch.tensor([[0, 1], [0, -1], [-2, 0], [0, 2], [0, 1], [-1, -5]])
+    points = Points(torch.tensor([[0, 1], [0, -1], [-2, 0], [0, 2], 
+                                  [0, 1], [-1, -5]]), R2('x'))
     time = torch.tensor([0, 0, 1, 1, 1, 2.0]).reshape(-1, 1)
-    inside = C._contains({'x': points, 't': time})
+    inside = C._contains(points, t=time)
     assert all(inside[:4])
     assert not any(inside[4:])
 
@@ -174,47 +179,50 @@ def test_circle_boundary_contains_if_params_change():
 def test_circle_boundary_random_sampling_with_n():
     C = Circle(R2('x'), [0, 0], 4).boundary
     points = C.sample_random_uniform(n=10)
-    assert points['x'].shape == (10, 2)
-    assert all(torch.isclose(torch.linalg.norm(points['x'], dim=1), torch.tensor(4.0)))
+    assert points[:, 'x'].shape == (10, 2)
+    assert all(torch.isclose(torch.linalg.norm(points[:, 'x'], dim=1), torch.tensor(4.0)))
 
 
 def test_circle_boundary_random_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4).boundary
     points = C.sample_random_uniform(d=0.5)
-    assert all(torch.isclose(torch.linalg.norm(points['x'], dim=1), torch.tensor(4.0)))
+    assert all(torch.isclose(torch.linalg.norm(points[:, 'x'], dim=1), torch.tensor(4.0)))
 
 
 def test_circle_boundary_random_sampling_with_n_and_variable_domain():
     C = Circle(R2('x'), center, radius).boundary
     points = C.sample_random_uniform(n=4, t=torch.tensor([0.0, 1.0]).reshape(-1, 1))
-    assert points['x'].shape == (8, 2)
+    assert points[:, 'x'].shape == (8, 2)
     assert all(C._contains(points, t=torch.tensor([0, 0, 0, 0, 1.0, 1, 1, 1]).reshape(-1, 1)))
 
 
 def test_circle_boundary_grid_sampling_with_n():
     C = Circle(R2('x'), [0, 0], 4).boundary
     points = C.sample_grid(n=30)
-    assert points['x'].shape == (30, 2)
-    assert all(torch.isclose(torch.linalg.norm(points['x'], dim=1), torch.tensor(4.0)))
+    assert points[:, 'x'].shape == (30, 2)
+    assert all(torch.isclose(torch.linalg.norm(points[:, 'x'], dim=1),
+                             torch.tensor(4.0)))
 
 
 def test_circle_boundary_grid_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4).boundary
     points = C.sample_grid(d=0.3)
-    assert all(torch.isclose(torch.linalg.norm(points['x'], dim=1), torch.tensor(4.0)))
+    assert all(torch.isclose(torch.linalg.norm(points[:, 'x'], dim=1),
+                             torch.tensor(4.0)))
 
 
 def test_circle_boundary_grid_sampling_with_n_and_variable_domain():
     C = Circle(R2('x'), center, radius).boundary
     points = C.sample_grid(n=2, t=torch.tensor([0.0, 1.0, 2.0, 5.5]).reshape(-1, 1))
-    assert points['x'].shape == (8, 2)
+    assert points[:, 'x'].shape == (8, 2)
     time = {'t' : torch.tensor([0, 0, 1.0, 1, 2, 2, 5.5, 5.5]).reshape(-1, 1)}
     assert all(C._contains(points, **time))
 
 
 def test_circle_normals():
     C = Circle(R2('x'), [0, 0], 4).boundary
-    normals = C.normal({'x': torch.tensor([[-4.0, 0], [4, 0], [0, 4], [0, -4]])})
+    points = Points(torch.tensor([[-4.0, 0], [4, 0], [0, 4], [0, -4]]), R2('x'))
+    normals = C.normal(points)
     assert normals.shape == (4, 2)
     assert torch.all(torch.isclose(torch.tensor([[-1.0, 0], [1, 0], [0, 1], [0, -1]]),
                                    normals))
@@ -222,8 +230,8 @@ def test_circle_normals():
 
 def test_circle_normals_if_domain_changes():
     C = Circle(R2('x'), center, radius).boundary
-    normals = C.normal({'x': torch.tensor([[1, 0], [1, 2], [2.0, -3.0]]),
-                        't': torch.tensor([0, 1, 2.0]).reshape(-1, 1)})
+    points = Points(torch.tensor([[1, 0], [1, 2], [2.0, -3.0]]), R2('x'))
+    normals = C.normal(points, t=torch.tensor([0, 1, 2.0]).reshape(-1, 1))
     assert normals.shape == (3, 2)
     assert torch.all(torch.isclose(torch.tensor([[1.0, 0], [0, 1], [0, -1]]), normals))
 
@@ -308,7 +316,8 @@ def test_parallelogram_contains():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     points = torch.tensor([[0.0, 0.0], [2, 0], [0.5, 0.5], [1.8, 0.7], [0.1, 0.9], 
                            [-1, -1], [-0.1, 0], [2.1, 0], [0, 1.01], [1, 1.1]])
-    inside = P._contains({'x': points})
+    points = Points(points, R2('x'))
+    inside = P._contains(points)
     assert all(inside[:5])
     assert not any(inside[5:])
 
@@ -318,7 +327,8 @@ def test_parallelogram_contains_if_origin_changes():
     points = torch.tensor([[0.0, 0.0], [1.0, 0], [1.6, 0.5], [0.2, 0.8],
                            [0.0, 0.0], [-2, 0], [0.4, 0.0]])
     time = torch.tensor([0, 1, 1.5, 0.1, 1, -1, 0.5]).reshape(-1, 1)
-    inside = P._contains({'x': points, 't': time})
+    points = Points(points, R2('x'))
+    inside = P._contains(points, t=time)
     assert all(inside[:4])
     assert not any(inside[4:])
 
@@ -328,7 +338,8 @@ def test_parallelogram_contains_if_all_corners_change():
     points = torch.tensor([[0.1, 0.0], [1, 2], [6, 6], 
                            [-23, 0], [-0.1, -8]])
     time = torch.tensor([0.1, 1, 5, 0.1, 1]).reshape(-1, 1)
-    inside = P._contains({'x': points, 't': time})
+    points = Points(points, R2('x'))
+    inside = P._contains(points, t=time)
     assert all(inside[:3])
     assert not any(inside[3:])
 
@@ -336,26 +347,26 @@ def test_parallelogram_contains_if_all_corners_change():
 def test_parallelogram_random_sampling_with_n():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     points = P.sample_random_uniform(n=40)
-    assert points['x'].shape == (40, 2)
-    assert all(points['x'][:, :1] <= 2.0)
-    assert all(points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert points[:, 'x'].shape == (40, 2)
+    assert all(points[:, 'x'][:, :1] <= 2.0)
+    assert all(points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_parallelogram_random_sampling_with_d():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     points = P.sample_random_uniform(d=0.1)
-    assert all(points['x'][:, :1] <= 2.0)
-    assert all(points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert all(points[:, 'x'][:, :1] <= 2.0)
+    assert all(points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_parallelogram_random_sampling_with_n_and_variable_origin():
     P = Parallelogram(R2('x'), origin, [5, 0], [0, 1])
     points = P.sample_random_uniform(n=100, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points['x'].shape == (200, 2)
+    assert points[:, 'x'].shape == (200, 2)
     assert all(P._contains(points,
                            t=torch.tensor([[0], [1]]).repeat_interleave(100)))
 
@@ -363,7 +374,7 @@ def test_parallelogram_random_sampling_with_n_and_variable_origin():
 def test_parallelogram_random_sampling_with_n_and_all_corners_variable():
     P = Parallelogram(R2('x'), origin, vec_1, vec_2)
     points = P.sample_random_uniform(n=100, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points['x'].shape == (200, 2)
+    assert points[:, 'x'].shape == (200, 2)
     assert all(P._contains(points,
                            t=torch.tensor([[0], [1]]).repeat_interleave(100)))
 
@@ -371,27 +382,27 @@ def test_parallelogram_random_sampling_with_n_and_all_corners_variable():
 def test_parallelogram_grid_sampling_with_n():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     points = P.sample_grid(n=40)
-    assert points['x'].shape == (40, 2)
-    assert all(points['x'][:, :1] <= 2.0)
-    assert all(points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert points[:, 'x'].shape == (40, 2)
+    assert all(points[:, 'x'][:, :1] <= 2.0)
+    assert all(points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_parallelogram_grid_sampling_with_d():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     points = P.sample_grid(d=0.1)
-    assert points['x'].shape == (200, 2)
-    assert all(points['x'][:, :1] <= 2.0)
-    assert all(points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert points[:, 'x'].shape == (200, 2)
+    assert all(points[:, 'x'][:, :1] <= 2.0)
+    assert all(points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_parallelogram_grid_sampling_with_n_and_variable_origin():
     P = Parallelogram(R2('x'), origin, [5, 0], [0, 1])
     points = P.sample_grid(n=100, t=torch.tensor([0.0]).reshape(-1, 1))
-    assert points['x'].shape == (100, 2)
+    assert points[:, 'x'].shape == (100, 2)
     assert all(P._contains(points,
                            t=torch.tensor([[0]]).repeat_interleave(100)))
 
@@ -399,7 +410,7 @@ def test_parallelogram_grid_sampling_with_n_and_variable_origin():
 def test_parallelogram_grid_sampling_with_n_and_all_corners_variable():
     P = Parallelogram(R2('x'), origin, vec_1, vec_2)
     points = P.sample_grid(n=100, t=torch.tensor([0.0]).reshape(-1, 1))
-    assert points['x'].shape == (100, 2)
+    assert points[:, 'x'].shape == (100, 2)
     assert all(P._contains(points,
                            t=torch.tensor([[0]]).repeat_interleave(100)))
 
@@ -423,7 +434,8 @@ def test_parallelogram_boundary_contains():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
     points = torch.tensor([[0, 0], [0.5, 0], [2, 0], [2, 0.3], [2, 1], [1.4, 1], 
                            [0, 1], [0, 0.3], [0.5, 0.5], [-0.1, 0], [1.1, -0.4]])
-    inside = P._contains({'x': points})
+    points = Points(points, R2('x'))
+    inside = P._contains(points)
     assert all(inside[:8])
     assert not any(inside[8:])
 
@@ -433,7 +445,8 @@ def test_parallelogram_boundary_contains_if_corners_change():
     points = torch.tensor([[0, 0], [1, 0], [1, 0], [1, 2],
                            [2, 1], [-0.1, -5], [3.2, 1], [1.1, 0.5]])
     time = torch.tensor([0, 0, 1, 1, 0, 0, 1, 1]).reshape(-1, 1)
-    inside = P._contains({'x': points, 't': time})
+    points = Points(points, R2('x'))
+    inside = P._contains(points, t=time)
     assert all(inside[:4])
     assert not any(inside[4:])
 
@@ -452,8 +465,10 @@ def test_parallelogram_boundary_volume_with_variable_corners():
 
 def test_parallelogram_normals():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
-    normals = P.normal({'x': torch.tensor([[1.0, 0], [2, 0.5], [1.2, 1], [0.0, 0.1], 
-                                           [0, 0], [2, 0], [2, 1], [0, 1]])})
+    points = torch.tensor([[1.0, 0], [2, 0.5], [1.2, 1], [0.0, 0.1], 
+                           [0, 0], [2, 0], [2, 1], [0, 1]])
+    points = Points(points, R2('x'))
+    normals = P.normal(points)
     assert normals.shape == (8, 2)
     root = torch.sqrt(torch.tensor(1/2.0))
     expected_normals = torch.tensor([[0, -1.0], [1, 0], [0, 1], [-1, 0], 
@@ -464,9 +479,11 @@ def test_parallelogram_normals():
 
 def test_parallelogram_normals_if_corners_change():
     P = Parallelogram(R2('x'), origin, vec_1, [0, 1]).boundary
-    normals = P.normal({'x': torch.tensor([[0, 1], [0, 1], [2.0, 0.0], [3.5, 1], 
-                                           [0.5, 0.5], [0.0, 0.8]]),
-                        't': torch.tensor([0, 1, 2.0, 3.0, 1.0, 0.0]).reshape(-1, 1)})
+    points = torch.tensor([[0, 1], [0, 1], [2.0, 0.0],
+                           [3.5, 1], [0.5, 0.5], [0.0, 0.8]])
+    points = Points(points, R2('x'))
+    normals = P.normal(points,
+                       t=torch.tensor([0, 1, 2.0, 3.0, 1.0, 0.0]).reshape(-1, 1))
     expected_normals = torch.tensor([[-0.7071,  0.7071], [-0.9239,  0.3827],
                                      [-0.2298, -0.9732], [ 0.0000,  1.0000],
                                      [-0.7071, -0.7071], [-1.0000,  0.0000]])
@@ -479,7 +496,7 @@ def test_parallelogram_normals_if_corners_change():
 def test_parallelogram_boundary_random_sampling_with_n():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
     points = P.sample_random_uniform(n=10)
-    assert points['x'].shape == (10, 2)
+    assert points[:, 'x'].shape == (10, 2)
     assert all(P._contains(points))
 
 
@@ -492,7 +509,7 @@ def test_parallelogram_boundary_random_sampling_with_d():
 def test_parallelogram_boundary_random_sampling_with_n_and_variable_origin():
     P = Parallelogram(R2('x'), origin, [5, 0], [0, 1]).boundary
     points = P.sample_random_uniform(n=10, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (30, 2)
+    assert points[:, 'x'].shape == (30, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]]).repeat_interleave(10)
     assert all(P._contains(points, t=times.reshape(-1, 1)))
 
@@ -500,7 +517,7 @@ def test_parallelogram_boundary_random_sampling_with_n_and_variable_origin():
 def test_parallelogram_boundary_random_sampling_with_n_and_variable_corners():
     P = Parallelogram(R2('x'), origin, vec_1, vec_2).boundary
     points = P.sample_random_uniform(n=1, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (3, 2)
+    assert points[:, 'x'].shape == (3, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]])
     assert all(P._contains(points, t=times.reshape(-1, 1)))
 
@@ -508,7 +525,7 @@ def test_parallelogram_boundary_random_sampling_with_n_and_variable_corners():
 def test_parallelogram_boundary_grid_sampling_with_n():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
     points = P.sample_grid(n=10)
-    assert points['x'].shape == (10, 2)
+    assert points[:, 'x'].shape == (10, 2)
     assert all(P._contains(points))
 
 
@@ -521,7 +538,7 @@ def test_parallelogram_boundary_grid_sampling_with_d():
 def test_parallelogram_boundary_grid_sampling_with_n_and_variable_origin():
     P = Parallelogram(R2('x'), origin, [5, 0], [0, 1]).boundary
     points = P.sample_grid(n=50, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (150, 2)
+    assert points[:, 'x'].shape == (150, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]]).repeat_interleave(50)
     assert all(P._contains(points, t=times.reshape(-1, 1)))
 
@@ -529,7 +546,7 @@ def test_parallelogram_boundary_grid_sampling_with_n_and_variable_origin():
 def test_parallelogram_boundary_grid_sampling_with_n_and_variable_corners():
     P = Parallelogram(R2('x'), origin, vec_1, vec_2).boundary
     points = P.sample_grid(n=100, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (300, 2)
+    assert points[:, 'x'].shape == (300, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]]).repeat_interleave(100)
     assert all(P._contains(points, t=times.reshape(-1, 1)))
 
@@ -618,7 +635,8 @@ def test_triangle_contains():
     T = Triangle(R2('x'), [0, 0], [2, 0], [0, 1])
     points = torch.tensor([[0.0, 0.0], [1.9, 0], [0.4, 0.4], [0.1, 0.9], [1.8, 0.7],  
                            [-1, -1], [-0.1, 0], [2.1, 0], [0, 1.01], [1, 1.1]])
-    inside = T._contains({'x': points})
+    points = Points(points, R2('x'))
+    inside = T._contains(points)
     assert all(inside[:4])
     assert not any(inside[4:])
 
@@ -628,7 +646,8 @@ def test_triangle_contains_if_origin_changes():
     points = torch.tensor([[0.0, 0.0], [1.0, 0], [1.6, 0.5], [0.2, 0.8],
                            [0.0, 0.0], [-2, 0], [0.4, 0.0]])
     time = torch.tensor([0, 1, 1.5, 0.1, 1, -1, 0.5]).reshape(-1, 1)
-    inside = T._contains({'x': points, 't': time})
+    points = Points(points, R2('x'))
+    inside = T._contains(points, t=time)
     assert all(inside[:4])
     assert not any(inside[4:])
 
@@ -638,7 +657,8 @@ def test_triangle_contains_if_all_corners_change():
     points = torch.tensor([[0.1, 0.0], [1, 2], [6, 6], 
                            [-23, 0], [-0.1, -8]])
     time = torch.tensor([0.1, 1, 5, 0.1, 1]).reshape(-1, 1)
-    inside = T._contains({'x': points, 't': time})
+    points = Points(points, R2('x'))
+    inside = T._contains(points, t=time)
     assert all(inside[:2])
     assert not any(inside[2:])
 
@@ -646,24 +666,24 @@ def test_triangle_contains_if_all_corners_change():
 def test_triangle_random_sampling_with_n():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1])
     points = T.sample_random_uniform(n=44)
-    assert points['x'].shape == (44, 2)
-    assert all(points['x'][:, :1] + points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert points[:, 'x'].shape == (44, 2)
+    assert all(points[:, 'x'][:, :1] + points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_triangle_random_sampling_with_d():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1])
     points = T.sample_random_uniform(d=0.1)
-    assert all(points['x'][:, :1] + points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert all(points[:, 'x'][:, :1] + points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_triangle_random_sampling_with_n_and_variable_origin():
     T = Triangle(R2('x'), origin, [5, 0], [0, 1])
     points = T.sample_random_uniform(n=100, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points['x'].shape == (200, 2)
+    assert points[:, 'x'].shape == (200, 2)
     assert all(T._contains(points,
                            t=torch.tensor([[0], [1]]).repeat_interleave(100)))
 
@@ -671,7 +691,7 @@ def test_triangle_random_sampling_with_n_and_variable_origin():
 def test_triangle_random_sampling_with_n_and_all_corners_variable():
     T = Triangle(R2('x'), origin, vec_1, vec_2)
     points = T.sample_random_uniform(n=113, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points['x'].shape == (226, 2)
+    assert points[:, 'x'].shape == (226, 2)
     assert all(T._contains(points,
                            t=torch.tensor([[0], [1]]).repeat_interleave(113)))
 
@@ -679,24 +699,24 @@ def test_triangle_random_sampling_with_n_and_all_corners_variable():
 def test_triangle_grid_sampling_with_n():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1])
     points = T.sample_grid(n=42)
-    assert points['x'].shape == (42, 2)
-    assert all(points['x'][:, :1] + points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert points[:, 'x'].shape == (42, 2)
+    assert all(points[:, 'x'][:, :1] + points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_triangle_grid_sampling_with_d():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1])
     points = T.sample_grid(d=0.1)
-    assert all(points['x'][:, :1] + points['x'][:, 1:] <= 1.0)
-    assert all(points['x'][:, :1] >= 0.0)
-    assert all(points['x'][:, 1:] >= 0.0)
+    assert all(points[:, 'x'][:, :1] + points[:, 'x'][:, 1:] <= 1.0)
+    assert all(points[:, 'x'][:, :1] >= 0.0)
+    assert all(points[:, 'x'][:, 1:] >= 0.0)
 
 
 def test_triangle_grid_sampling_with_n_and_variable_origin():
     T = Triangle(R2('x'), origin, [5, 0], [0, 1])
     points = T.sample_grid(n=10, t=torch.tensor([0.0]).reshape(-1, 1))
-    assert points['x'].shape == (10, 2)
+    assert points[:, 'x'].shape == (10, 2)
     assert all(T._contains(points,
                            t=torch.tensor([[0]]).repeat_interleave(10)))
 
@@ -704,7 +724,7 @@ def test_triangle_grid_sampling_with_n_and_variable_origin():
 def test_triangle_grid_sampling_with_n_and_all_corners_variable():
     T = Triangle(R2('x'), origin, vec_1, vec_2)
     points = T.sample_grid(n=100, t=torch.tensor([0.0]).reshape(-1, 1))
-    assert points['x'].shape == (100, 2)
+    assert points[:, 'x'].shape == (100, 2)
     assert all(T._contains(points,
                            t=torch.tensor([[0]]).repeat_interleave(100)))
 
@@ -728,7 +748,8 @@ def test_triangle_boundary_contains():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1]).boundary
     points = torch.tensor([[0, 0], [0.5, 0], [1, 0], [0.5, 0.5], [0.3, 0.7], [0, 0.2], 
                            [0, 1], [0, -0.3], [-0.5, -0.5], [-0.1, 0], [1.1, -0.4]])
-    inside = T._contains({'x': points})
+    points = Points(points, R2('x'))
+    inside = T._contains(points)
     assert all(inside[:7])
     assert not any(inside[7:])
 
@@ -738,7 +759,8 @@ def test_triangle_boundary_contains_if_corners_change():
     points = torch.tensor([[0, 0], [1, 0], [1, 0], [1.5, 1],
                            [2, 1], [-0.1, -5], [3.2, 1], [1.1, 0.5]])
     time = torch.tensor([0, 0, 1, 1, 0, 0, 1, 1]).reshape(-1, 1)
-    inside = T._contains({'x': points, 't': time})
+    points = Points(points, R2('x'))
+    inside = T._contains(points, t=time)
     assert all(inside[:4])
     assert not any(inside[4:])
 
@@ -759,8 +781,9 @@ def test_triangle_boundary_volume_with_variable_corners():
 
 def test_triangle_normals():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1]).boundary
-    normals = T.normal({'x': torch.tensor([[0.7, 0], [0, 0.5], [0.5, 0.5], [0.3, 0.7], 
-                                           [0.1, 0], [0, 0]])})
+    points = Points(torch.tensor([[0.7, 0], [0, 0.5], [0.5, 0.5],
+                                  [0.3, 0.7], [0.1, 0], [0, 0]]), R2('x'))
+    normals = T.normal(points)
     assert normals.shape == (6, 2)
     root = torch.sqrt(torch.tensor(1/2.0))
     expected_normals = torch.tensor([[0, -1.0], [-1, 0], [root, root], [root, root], 
@@ -770,9 +793,11 @@ def test_triangle_normals():
 
 def test_triangle_normals_if_corners_change():
     T = Triangle(R2('x'), origin, vec_1, [0, 1]).boundary
-    normals = T.normal({'x': torch.tensor([[0, 1], [0, 1], [2.0, 0.0], [2, 0.5], 
-                                          [0.5, 0.5], [0.0, 0.8]]),
-                        't': torch.tensor([0, 1, 2.0, 3.0, 1.0, 0.0]).reshape(-1, 1)})
+    points = torch.tensor([[0, 1], [0, 1], [2.0, 0.0], [2, 0.5], 
+                           [0.5, 0.5], [0.0, 0.8]])
+    points = Points(points, R2('x'))
+    normals = T.normal(points,
+                       t=torch.tensor([0, 1, 2.0, 3.0, 1.0, 0.0]).reshape(-1, 1))
     expected_normals = torch.tensor([[-0.3827,  0.9239], [-0.8112,  0.5847],
                                      [-0.2298, -0.9732], [ 0.2425,  0.9701],
                                      [-0.7071, -0.7071], [-1.0000,  0.0000]])
@@ -785,7 +810,7 @@ def test_triangle_normals_if_corners_change():
 def test_triangle_boundary_random_sampling_with_n():
     T = Triangle(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
     points = T.sample_random_uniform(n=32)
-    assert points['x'].shape == (32, 2)
+    assert points[:, 'x'].shape == (32, 2)
     assert all(T._contains(points))
 
 
@@ -798,7 +823,7 @@ def test_triangle_boundary_random_sampling_with_d():
 def test_triangle_boundary_random_sampling_with_n_and_variable_origin():
     T = Triangle(R2('x'), origin, [5, 0], [0, 1]).boundary
     points = T.sample_random_uniform(n=11, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (33, 2)
+    assert points[:, 'x'].shape == (33, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]]).repeat_interleave(11)
     assert all(T._contains(points, t=times.reshape(-1, 1)))
 
@@ -806,7 +831,7 @@ def test_triangle_boundary_random_sampling_with_n_and_variable_origin():
 def test_triangle_boundary_random_sampling_with_n_and_variable_corners():
     T = Triangle(R2('x'), origin, vec_1, vec_2).boundary
     points = T.sample_random_uniform(n=1, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (3, 2)
+    assert points[:, 'x'].shape == (3, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]])
     assert all(T._contains(points, t=times.reshape(-1, 1)))
 
@@ -814,7 +839,7 @@ def test_triangle_boundary_random_sampling_with_n_and_variable_corners():
 def test_triangle_boundary_grid_sampling_with_n():
     T = Triangle(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
     points = T.sample_grid(n=10)
-    assert points['x'].shape == (10, 2)
+    assert points[:, 'x'].shape == (10, 2)
     assert all(T._contains(points))
 
 
@@ -827,7 +852,7 @@ def test_triangle_boundary_grid_sampling_with_d():
 def test_triangle_boundary_grid_sampling_with_n_and_variable_origin():
     T = Triangle(R2('x'), origin, [5, 0], [0, 1]).boundary
     points = T.sample_grid(n=50, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (150, 2)
+    assert points[:, 'x'].shape == (150, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]]).repeat_interleave(50)
     assert all(T._contains(points, t=times.reshape(-1, 1)))
 
@@ -835,6 +860,6 @@ def test_triangle_boundary_grid_sampling_with_n_and_variable_origin():
 def test_triangle_boundary_grid_sampling_with_n_and_variable_corners():
     T = Triangle(R2('x'), origin, vec_1, vec_2).boundary
     points = T.sample_grid(n=100, t=torch.tensor([[0.0], [1.0], [2.0]]))
-    assert points['x'].shape == (300, 2)
+    assert points[:, 'x'].shape == (300, 2)
     times = torch.tensor([[0.0], [1.0], [2.0]]).repeat_interleave(100)
     assert all(T._contains(points, t=times.reshape(-1, 1)))

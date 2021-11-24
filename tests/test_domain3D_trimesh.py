@@ -6,6 +6,7 @@ import os
 from torchphysics.problem.spaces.space import R3, R2
 from torchphysics.problem.domains.domain3D.trimesh_polyhedron import \
     TrimeshPolyhedron, TrimeshBoundary
+from torchphysics.problem.spaces.points import Point, Points
 
 
 def _create_simple_polygon():
@@ -78,7 +79,8 @@ def test_check_inside_and_outside_poly3D():
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = [[0, 0, 0], [0.25, 0.25, 0.25], [0.2, 0.2, -0.1], [0.1, 0.1, 0.78],
               [10, 4, 3], [-0.01, 0, 0]]
-    inside = poly3D._contains({'x': torch.tensor(points)})
+    points = Points(torch.tensor(points), R3('x'))
+    inside = poly3D._contains(points)
     assert not inside[0]
     assert all(inside[1:4])
     assert not any(inside[4:6])
@@ -90,7 +92,8 @@ def test_check_on_boundary_poly3D():
     points = [[0, 0, 0], [0.25, 0.25, 0.25], [0.2, 0.2, -0.1], [0.1, 0.1, 0.78],
               [10, 4, 3], [-0.01, 0, 0], [0, 0, 1], [0.5, 0, 0], [0.5, 0.5, -1], 
               [0.5, 0.5, 0]]
-    on_bound = poly3D.boundary._contains({'x': torch.tensor(points)})
+    points = Points(torch.tensor(points), R3('x'))
+    on_bound = poly3D.boundary._contains(points)
     assert on_bound[0]
     assert not any(on_bound[1:4])
     assert not any(on_bound[4:6])
@@ -101,7 +104,7 @@ def test_random_sampling_inside_poly3D_with_n():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.sample_random_uniform(n=545)
-    assert points['x'].shape == (545,3)
+    assert points[:, 'x'].shape == (545,3)
     assert all(poly3D._contains(points))   
 
 
@@ -116,7 +119,7 @@ def test_random_sampling_inside_poly3D_with_n_and_params():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.sample_random_uniform(n=20, t=torch.tensor([[1.2], [9]]))
-    assert points['x'].shape == (40,3)
+    assert points[:, 'x'].shape == (40,3)
     assert all(poly3D._contains(points))   
 
 
@@ -124,7 +127,7 @@ def test_grid_sampling_inside_poly3D():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.sample_grid(n=20)
-    assert points['x'].shape == (20, 3)
+    assert points[:, 'x'].shape == (20, 3)
     assert all(torch.logical_or(poly3D._contains(points),
                                 poly3D.boundary._contains(points)))    
 
@@ -141,7 +144,7 @@ def test_grid_sampling_inside_poly3D_with_arbritray_params():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.sample_grid(n=50, t=torch.tensor([[1.0]]))
-    assert points['x'].shape == (50, 3)
+    assert points[:, 'x'].shape == (50, 3)
     assert all(torch.logical_or(poly3D._contains(points),
                                 poly3D.boundary._contains(points)))   
 
@@ -150,7 +153,7 @@ def test_random_sampling_boundary_poly3D():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.boundary.sample_random_uniform(n=50)
-    assert points['x'].shape == (50,3)
+    assert points[:, 'x'].shape == (50,3)
     assert all(poly3D.boundary._contains(points)) 
 
 
@@ -165,7 +168,7 @@ def test_random_sampling_boundary_poly3D_with_n_and_params():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.boundary.sample_random_uniform(n=50, t=torch.tensor([[1.2], [9]]))
-    assert points['x'].shape == (100,3)
+    assert points[:, 'x'].shape == (100,3)
     assert all(poly3D.boundary._contains(points)) 
 
 
@@ -173,7 +176,7 @@ def test_grid_sampling_boundary_poly3D():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.boundary.sample_grid(50)
-    assert points['x'].shape == (50,3)
+    assert points[:, 'x'].shape == (50,3)
     assert all(poly3D.boundary._contains(points)) 
 
 
@@ -205,7 +208,8 @@ def test_normals_direction_poly3D():
     faces = [[0, 1, 3], [0, 2, 3], [0, 1, 2.0], [1, 2, 3]]
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces).boundary
     points = [[0.2, 0.2, 0], [0, 0.2, 0.2], [0.2, 0, 0.2], [0.4, 0.4, 0.2]]
-    normals = poly3D.normal({'x': torch.tensor(points)})
+    points = Points(torch.tensor(points), R3('x'))
+    normals = poly3D.normal(points)
     assert normals.shape == (4, 3)
     assert torch.allclose(normals[0], torch.tensor([0.0, 0, -1.0]))
     assert torch.allclose(normals[1], torch.tensor([-1.0, 0, 0]))
@@ -224,13 +228,14 @@ def test_projection_on_xy_plane():
         bounds = p.bounding_box()
         assert np.allclose(bounds, [0, 1, 0, 1], atol=1e-06)
         points = [[0, 0], [0.25, 0.25], [0.67, 0.3], [1, 1], [-0.1, 0]]
-        inside = p._contains({'x': torch.tensor(points)})
+        points = Points(torch.tensor(points), R2('x'))
+        inside = p._contains(points)
         assert not inside[0]    
         assert not inside[4] 
         assert not inside[3]
         assert inside[1] 
         assert inside[2] 
-        assert p.boundary._contains({'x' : torch.tensor([[0, 0]])})
+        assert p.boundary._contains(Points(torch.tensor([[0, 0.0]]), R2('x')))
 
 
 def test_slice_with_xy_plane():
@@ -241,13 +246,14 @@ def test_slice_with_xy_plane():
     bounds = p.bounding_box()
     assert np.allclose(bounds, [0, 1, 0, 1], atol=1e-06)
     points = [[0, 0], [0.25, 0.25], [0.67, 0.3], [1, 1], [-0.1, 0]]
-    inside = p._contains({'x': torch.tensor(points)})
+    points = Points(torch.tensor(points), R2('x'))
+    inside = p._contains(points)
     assert not inside[0]    
     assert not inside[4] 
     assert not inside[3]
     assert inside[1] 
     assert inside[2] 
-    assert p.boundary._contains({'x' : torch.tensor([[0, 0]])})
+    assert p.boundary._contains(Points(torch.tensor([[0, 0.0]]), R2('x')))
 
 
 def test_slice_with_plane_parallel_to_xy():
@@ -258,13 +264,14 @@ def test_slice_with_plane_parallel_to_xy():
     bounds = p.bounding_box()
     assert np.allclose(bounds, [0, 0.5, 0, 0.5], atol=1e-06)
     points = [[0, 0], [0.2, 0.2], [0.67, 0.3], [1, 1], [-0.1, 0]]
-    inside = p._contains({'x': torch.tensor(points)})
+    points = Points(torch.tensor(points), R2('x'))
+    inside = p._contains(points)
     assert not inside[0]    
     assert not inside[4] 
     assert not inside[3]
     assert inside[1] 
     assert not inside[2] 
-    assert p.boundary._contains({'x' : torch.tensor([[0, 0]])})
+    assert p.boundary._contains(Points(torch.tensor([[0, 0.0]]), R2('x')))
 
 
 def test_slice_with_plane_empty():

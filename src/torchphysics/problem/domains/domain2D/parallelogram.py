@@ -73,8 +73,9 @@ class Parallelogram(Domain):
         return bounds
 
     def _contains(self, points, **params):
-        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(**points, **params)
-        points = self.space.as_tensor(points)
+        origin, _, _, dir_1, dir_2 = \
+            self._construct_parallelogram(**points.coordinates, **params)
+        points = points.as_tensor
         points -= origin
         bary_x, bary_y = self._solve_lgs(points, dir_1, dir_2)
         in_x = torch.logical_and(0 <= bary_x, bary_x <= 1)
@@ -149,9 +150,9 @@ class ParallelogramBoundary(BoundaryDomain):
         super().__init__(domain)
 
     def _contains(self, points, **params):
-        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**points,
-                                                                          **params)
-        points = self.space.as_tensor(points)
+        origin, _, _, dir_1, dir_2 = \
+            self.domain._construct_parallelogram(**points.coordinates, **params)
+        points = points.as_tensor
         points -= origin
         bary_x, bary_y = self.domain._solve_lgs(points, dir_1, dir_2)
         x_close = self._bary_coords_close_to_0_or_1(bary_x, bary_y)
@@ -225,9 +226,9 @@ class ParallelogramBoundary(BoundaryDomain):
         self._scale_points_on_side(-dir_2, side_2, points, bound_location)
 
     def normal(self, points, **params):
-        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**points, 
-                                                                          **params)
-        points = self.space.as_tensor(points)
+        origin, _, _, dir_1, dir_2 = \
+            self.domain._construct_parallelogram(**points.coordinates, **params)
+        points = points.as_tensor
         normals = torch.zeros_like(points)
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, dir_2)
         normal_dir_1 = self._get_normal_direction(dir_1)
