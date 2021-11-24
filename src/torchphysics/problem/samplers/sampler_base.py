@@ -125,13 +125,6 @@ class PointSampler:
                 repeated_params[key] = points.repeat(n, 1)
         return repeated_params
 
-    def _extract_tensor_len_from_dict(self, point_dict):
-        tensor_len = 1
-        for key in point_dict:
-            tensor_len = len(point_dict[key])
-            break
-        return tensor_len
-
     def _sample_params_independent(self, sample_function, **params):
         """If the domain is independent of the used params it is more efficent
         to sample points once and then copy them accordingly.

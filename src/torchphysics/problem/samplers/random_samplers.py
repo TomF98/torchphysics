@@ -5,6 +5,7 @@ import numbers
 
 from .sampler_base import PointSampler
 from ..domains.domain import BoundaryDomain
+from ..spaces import Points
 
 
 class RandomUniformSampler(PointSampler):
@@ -117,7 +118,7 @@ class GaussianSampler(PointSampler):
             new_points_dict = {}
             while current_num_of_points < self.n_points:
                 new_points = torch_dis.sample((self.n_points,))
-                new_points = self.domain.space.embed(new_points)
+                new_points = Points(new_points, self.domain.space)
                 ith_params = self._extract_points_from_dict(i, params)
                 repeat_params = self._repeat_input_params(self.n_points, **ith_params)
                 new_points.update(repeat_params)
@@ -186,9 +187,9 @@ class LHSSampler(PointSampler):
         return lhs_points
 
     def _check_lhs_inside(self, lhs_points, ith_params):
-        new_points = self.domain.space.embed(lhs_points)
+        new_points = Points(lhs_points, self.domain.space)
         repeat_params = self._repeat_input_params(self.n_points, **ith_params)
-        new_points.update(repeat_params)
+        new_points.join(repeat_params)
         inside = self.domain._contains(new_points)
         index = torch.where(inside)[0]
         for key, data in new_points.items():

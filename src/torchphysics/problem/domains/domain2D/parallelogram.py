@@ -1,7 +1,7 @@
 import torch
 
 from ..domain import Domain, BoundaryDomain
-
+from ...spaces import Points
 
 class Parallelogram(Domain):
     """Class for arbitrary parallelograms, even if time dependet
@@ -102,7 +102,7 @@ class Parallelogram(Domain):
         points_in_dir_2 = bary_coords[:, :, 1:] * dir_2[:, None]
         points = points_in_dir_1 + points_in_dir_2
         points += origin[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -117,7 +117,7 @@ class Parallelogram(Domain):
         points_in_dir_2 = bary_coords[:, 1:] * dir_2
         points = points_in_dir_1 + points_in_dir_2
         points += origin
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _compute_barycentric_grid(self, n, dir_1, dir_2):
         side_length_1 = torch.linalg.norm(dir_1, dim=1)
@@ -181,7 +181,7 @@ class ParallelogramBoundary(BoundaryDomain):
         self._transform_interval_to_boundary(dir_1, dir_2, side_1, side_2, points, 
                                              bound_location)
         points += origin[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def _compute_side_length(self, dir_1, dir_2):
         # essentially computes the same as volume, but we need to set the view 
@@ -209,7 +209,7 @@ class ParallelogramBoundary(BoundaryDomain):
         self._transform_interval_to_boundary(dir_1, dir_2, side_1, side_2, points, 
                                              bound_location)
         points += origin[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def _transform_interval_to_boundary(self, dir_1, dir_2, side_1, side_2,
                                         points, bound_location):

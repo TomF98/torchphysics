@@ -15,7 +15,8 @@ from .utils.plot import _scatter
 
 class Solver(pl.LightningModule):
     """
-    Handles optimization and metric logging
+    Handles optimization and metric logging. All necessary models are
+    already hold by the train and val conditions.
     """
     def __init__(self, train_conditions, val_conditions):
         super().__init__()

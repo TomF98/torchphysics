@@ -4,7 +4,7 @@ import shapely.ops as s_ops
 
 from ..domain import Domain, BoundaryDomain
 from .parallelogram import Parallelogram
-
+from ...spaces import Points
 
 class ShapelyPolygon(Domain):
     """Class for polygons. Uses the shapely-package.
@@ -76,7 +76,7 @@ class ShapelyPolygon(Domain):
             if len(points) == n:
                 break
         points = self._check_enough_points_sampled(n, points, big_t)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_in_triangulation(self, t, n):
         (x0, y0), (x1, y1), (x2, y2), _ = t.exterior.coords
@@ -119,7 +119,7 @@ class ShapelyPolygon(Domain):
             # if a number of points if specified we have to make sure
             # to sample the right amount of points
             points = self._grid_enough_points(n, points)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _create_points_in_bounding_box(self, n):
         bounds = self.bounding_box()
@@ -222,7 +222,7 @@ class ShapelyBoundary(BoundaryDomain):
             points, index, current_length = \
                 self._distribute_line_to_boundary(points, index, line_points,
                                                   boundary_part, current_length)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _distribute_line_to_boundary(self, points, index, line_points,
                                      corners, current_length):

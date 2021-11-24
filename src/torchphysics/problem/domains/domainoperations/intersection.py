@@ -2,6 +2,7 @@ import warnings
 import torch
 
 from ..domain import Domain, BoundaryDomain
+from ...spaces import Points
 
 
 class IntersectionDomain(Domain):
@@ -44,7 +45,7 @@ class IntersectionDomain(Domain):
             raise NotImplementedError
         else:
             points = self._sample_random_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_random_with_d(self, d, **params):
         points_a = self.domain_a.sample_random_uniform(d=d, **params)
@@ -64,7 +65,7 @@ class IntersectionDomain(Domain):
             raise NotImplementedError
         else:
             points = self._sample_grid_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_grid_with_d(self, d, **params):
         points_a = self.domain_a.sample_grid(d=d, **params)
@@ -103,7 +104,7 @@ class IntersectionBoundaryDomain(BoundaryDomain):
             raise NotImplementedError
         else:
             points = self._sample_random_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_random_with_d(self, d, **params):
         points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d, **params)
@@ -125,7 +126,7 @@ class IntersectionBoundaryDomain(BoundaryDomain):
             raise NotImplementedError
         else:
             points = self._sample_grid_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_grid_with_d(self, d, **params):
         points_a = self.domain.domain_a.boundary.sample_grid(d=d, **params)

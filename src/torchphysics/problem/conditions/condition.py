@@ -59,8 +59,8 @@ class DataCondition(Condition):
         The torch module which should be fitted to data.
     dataloader : torch.utils.DataLoader
         A PyTorch dataloader which supplies the iterator to load data-target pairs
-        from some given dataset. Data and target should be handed embedded in input
-        or output spaces, i.e. with the correct dictionarys.
+        from some given dataset. Data and target should be handed as points in input
+        or output spaces, i.e. with the correct point object.
     norm : torch.nn.Module
         A torch Module which computes the (scalar) distance of the computed output
         and the given target, e.g. torch.nn.MSELoss().
@@ -120,89 +120,11 @@ class PINNCondition(Condition):
     def forward(self):
         x = next(self.sampler)
         y = self.module(x)  # y is in coords of output space
-        return self.norm(self.residual_fn(**{**y, **x}))
+        return self.norm(self.residual_fn(**y.coordinates, **x.coordinates))
 
-
-class DiffEqCondition(Condition):
-    """
-    A condition that enforces the solution of a Differential Equation in the
-    inner part of a domain.
-
-    Parameters
-    ----------
-    pde : function handle
-        A method that takes the output and input of a model and computes its deviation
-        from some (partial) differential equation. See utils.differentialoperators for
-        useful helper functions.
-    norm : torch.nn.Module
-        A Pytorch module which forward pass returns the scalar norm of the difference of
-        two input tensors, and is therefore similar to the implementation of nn.MSELoss.
-        The norm is used to compute the loss for the deviation of the model from a PDE.
-    point_sampler: DataSampler
-        A sampler that creates the training/validation points for this condition.
-    name : str
-        name of this condition (should be unique per condition)
-    data_fun : function handle, optional
-        A method that represents the possible right-hand side of the differential 
-        equation. Since it is more efficent to comput the function only
-        once, if it is independetn of the model. 
-        If the right-hand side dependents on the model outputs, or is zero, this
-        parameter should be None and the whole condition has to be implemented in
-        the pde!
-    weight : float, optional
-        Scalar weight of this condition that is used in the weighted sum for the
-        training loss. Defaults to 1.
-    track_gradients : bool, optional
-        If True, the gradients are still tracked during validation to enable the
-        computation of derivatives w.r.t. the inputs.
-    data_fun_whole_batch : bool, optional
-        Specifies if the data_fun can work with a whole batch of data (then True)
-        or every sample point has to be evaluated alone (False). 
-    data_plot_variables : bool or tuple, optional
-        The variables which are used to log the used training data in a scatter plot.
-        If False, no plots are created. If True, behaviour is defined in each condition.
-    """
-
-    def __init__(self, pde, norm, point_sampler, 
-                 name='pde', data_fun=None, weight=1.0,
-                 track_gradients=True, data_fun_whole_batch=True,
-                 data_plot_variables=False):
-        super().__init__(name, norm, weight, point_sampler=point_sampler, 
-                         track_gradients=track_gradients,
-                         data_plot_variables=data_plot_variables)
-        self.pde = pde
-        self.data_fun = data_fun
-        self.data_fun_whole_batch = data_fun_whole_batch
-
-    def forward(self, model, data):
-        u = model({v: data[v] for v in self.setting.domain.space})
-        inp = prepare_user_fun_input(self.pde,
-                                     {**u,
-                                      **data,
-                                      **self.setting.parameters})
-        err = self.pde(**inp)
-        return self.norm(err, torch.zeros_like(err))
-
-    def get_data(self):
-        inp_data = self.point_sampler.sample_points()
-        if self.data_fun is None:
-            return inp_data
-        else:
-            inp_data, data = apply_data_fun(self.data_fun,
-                                            inp_data,
-                                            whole_batch=self.data_fun_whole_batch,
-                                            batch_size=len(self.point_sampler))
-            return {**inp_data,
-                    'data': data}
-
-    def get_data_plot_variables(self):
-        if self.data_plot_variables is True:
-            return self.setting.domain.space
-        elif self.data_plot_variables is False:
-            return None
-        else:
-            return self.data_plot_variables
-
+"""
+Old conditions:
+"""
 
 class RestrictionCondition(Condition):
     """A condition to limit the solution/parameter values to specific range.

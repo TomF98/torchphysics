@@ -2,6 +2,7 @@ import torch
 import numpy as np
 
 from ..domain import Domain, BoundaryDomain
+from ...spaces import Points
 
 
 class Circle(Domain):
@@ -57,7 +58,7 @@ class Circle(Domain):
                             torch.multiply(r, torch.sin(phi))), dim=2)
         # [:,None,:] is needed so that the correct entries will be added
         points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -68,7 +69,7 @@ class Circle(Domain):
         grid = grid.repeat(num_of_params, 1).view(num_of_params, n, 2) 
         points = torch.multiply(radius, grid)
         points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def _compute_center_and_radius(self, **params):
         center = self.center(**params).reshape(-1, 2)
@@ -117,7 +118,7 @@ class CircleBoundary(BoundaryDomain):
                             torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
         points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -130,7 +131,7 @@ class CircleBoundary(BoundaryDomain):
                             torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
         points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, **params):
         center, radius = self.domain._compute_center_and_radius(**params, **points)

@@ -110,14 +110,13 @@ class Domain:
 
         Parameters
         ----------
-        points : list or array
-            The list of diffrent or a single point that should be checked.
-            E.g in 2D: points = [[2, 4], [9, 6], ....]
+        points : Points
+            A Points object that should be checked.
 
         Returns
         -------
-        array
-            A an array of the shape (len(points), 1) where every entry contains
+        torch.Tensor
+            A boolean Tensor of the shape (len(points), 1) where every entry contains
             true if the point was inside or false if not.
         """
         return self._contains(points)
@@ -130,7 +129,8 @@ class Domain:
     def bounding_box(self, **params):
         """Computes the bounds of the domain.
 
-        Returns 
+        Returns
+        -------
         list :
             A list with the length of 2*self.dim.
             It has the form [axis_1_min, axis_1_max, axis_2_min, axis_2_max, ...], 
@@ -146,7 +146,15 @@ class Domain:
         Parameters
         ----------
         n : int
-            The number of points that should be created.
+            optional, The number of points that should be created.
+        d : float
+            optional, The density of points that should be created, if
+            n is not defined.
+        
+        Returns
+        -------
+        Points :
+            A Points object containing the sampled points.
         """
         raise NotImplementedError
 
@@ -157,7 +165,15 @@ class Domain:
         Parameters
         ----------
         n : int
-            The number of points that should be created.
+            optional, The number of points that should be created.
+        d : float
+            optional, The density of points that should be created, if
+            n is not defined.
+        
+        Returns
+        -------
+        Points :
+            A Points object containing the sampled points.
         """
         raise NotImplementedError
 
@@ -201,8 +217,8 @@ class BoundaryDomain(Domain):
         self.necessary_variables = self.domain.necessary_variables
 
     def __call__(self, **data):
-        evaluate_domain = self.domain(**data)
-        return evaluate_domain.boundary
+        evaluated_domain = self.domain(**data)
+        return evaluated_domain.boundary
 
     def bounding_box(self, **params):
         return self.domain.bounding_box(**params)

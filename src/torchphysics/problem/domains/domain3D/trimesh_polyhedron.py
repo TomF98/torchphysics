@@ -6,6 +6,7 @@ import logging
 from ..domain import Domain, BoundaryDomain
 from ..domain2D.shapely_polygon import ShapelyPolygon
 from .sphere import Sphere
+from ...spaces import Points
 
 
 class TrimeshPolyhedron(Domain):
@@ -166,7 +167,7 @@ class TrimeshPolyhedron(Domain):
             new_points = trimesh.sample.volume_mesh(self.mesh, n-computed_points)
             points = torch.cat((points, torch.tensor(new_points)), dim=0)
             computed_points += len(new_points)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         n = self._compute_number_of_points(n, d, params)
@@ -174,7 +175,7 @@ class TrimeshPolyhedron(Domain):
         points = self._point_grid_in_bounding_box(n, bounds)
         points_inside = self._get_points_inside(points)
         final_points = Sphere._append_random(self, points_inside, n, params)
-        return self.space.embed(final_points)
+        return Points(final_points, self.space)
 
     def _point_grid_in_bounding_box(self, n, bounds):
         b_box_volume = self._get_bounding_box_volume(bounds)
@@ -223,14 +224,14 @@ class TrimeshBoundary(BoundaryDomain):
         n = self.domain._compute_number_of_points(n, d, params)
         points = trimesh.sample.sample_surface(self.domain.mesh, n)[0]
         tensor_points = torch.tensor(points)
-        return self.space.embed(tensor_points) 
+        return Points(tensor_points, self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         n = self.domain._compute_number_of_points(n, d, params)
         points = trimesh.sample.sample_surface_even(self.domain.mesh, n)[0]
         points = torch.tensor(points)
         points = Sphere._append_random(self, points, n, params)
-        return self.space.embed(points) 
+        return Points(points, self.space)
 
     def normal(self, points, **params):
         points = self.space.as_tensor(points)

@@ -1,7 +1,7 @@
 import torch
 
 from ..domain import Domain
-
+from ...spaces import Points
 
 class Point(Domain):
     """Creates a single point at the given coordinates.
@@ -25,7 +25,7 @@ class Point(Domain):
         return Point(space=self.space, point=new_point)
 
     def _contains(self, points, **params):
-        point_params = self.point(**params, **points)
+        point_params = self.point(**params, **points.coordinates)
         points = self.space.as_tensor(points)
         inside = torch.isclose(points[:, None], point_params)
         return torch.all(inside, dim=2)
@@ -66,7 +66,7 @@ class Point(Domain):
         point_params = self.point(**params)
         points = torch.ones((self.get_num_of_params(**params), n, self.space.dim))
         points *= point_params
-        return self.space.embed(points.reshape(-1, self.space.dim))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         # for one single point grid and random sampling is the same

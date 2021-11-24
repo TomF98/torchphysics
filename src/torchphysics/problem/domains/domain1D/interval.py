@@ -1,7 +1,7 @@
 import torch
 
 from ..domain import Domain, BoundaryDomain
-
+from ...spaces import Points
 
 class Interval(Domain):
     """Creates a Interval of the form [a, b].
@@ -45,7 +45,7 @@ class Interval(Domain):
         points = torch.rand((self.get_num_of_params(**params), n, 1))
         points *= (ub - lb)
         points += lb
-        return self.space.embed(points.reshape(-1, 1))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -55,7 +55,7 @@ class Interval(Domain):
         points = torch.linspace(0, 1, n+2)[1:-1, None]
         points = (ub - lb) * points 
         points += lb
-        return self.space.embed(points.reshape(-1, 1))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def bounding_box(self, **params):
         lb = self.lower_bound(**params)
@@ -105,7 +105,7 @@ class IntervalBoundary(BoundaryDomain):
         ub = self.domain.upper_bound(**params)
         random_boundary_index = torch.rand((self.get_num_of_params(**params), n, 1)) < 0.5 
         points = torch.where(random_boundary_index, lb, ub)
-        return self.space.embed(points.reshape(-1, 1))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -114,7 +114,7 @@ class IntervalBoundary(BoundaryDomain):
         ub = self.domain.upper_bound(**params)
         b_index = torch.tensor([0, 1], dtype=bool).repeat(int(n/2.0) + 1)
         points = torch.where(b_index[:n], lb, ub)
-        return self.space.embed(points.reshape(-1, 1))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, **params):
         close_to_left, _ = self._check_close_left_right(points, params)
@@ -150,7 +150,7 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
         side = self.side(**params)
         points = torch.ones((self.get_num_of_params(**params), n, 1))
         points *= side
-        return self.space.embed(points.reshape(-1, 1))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         return self.sample_random_uniform(n=n, d=d, **params)

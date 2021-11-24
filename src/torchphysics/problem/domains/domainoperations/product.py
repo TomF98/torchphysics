@@ -6,6 +6,7 @@ from ..domain import BoundaryDomain, Domain
 from ..domain0D import Point
 from .union import UnionDomain
 from ....utils.user_fun import UserFunction
+from ...spaces import Points
 
 
 N_APPROX_VOLUME = 10
@@ -167,8 +168,8 @@ class ProductDomain(Domain):
                         for var in params:
                             new_params[var] = new_params[var][:n]
                         n_points = n
-            a_points = self.domain_a.sample_random_uniform(n=1, **new_params, **b_points)
-            return {**a_points, **b_points}
+            a_points = self.domain_a.sample_random_uniform(n=1, **new_params.coordinates, **b_points.coordinates)
+            return Points.from_coordinates({**a_points.coordinates, **b_points.coordinates})
         else:
             assert d is not None
             n = int(d*self.volume())

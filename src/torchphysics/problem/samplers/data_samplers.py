@@ -1,10 +1,9 @@
 """File with samplers that handle external created data.
 E.g. measurements or validation data computed with other methods.
 """
-import torch
-import numpy as np
 
 from .sampler_base import PointSampler
+from ..spaces import Points
 
 
 class DataSampler(PointSampler):
@@ -12,48 +11,29 @@ class DataSampler(PointSampler):
 
     Parameters
     ----------
-    input_data : dictionary
-        A dictionary containing the input data for the model. The dictionary keys
-        have to fit the space variables of the underlying problem. 
-        If the data is present in an array/tensor, but ordered accordingly, 
-        one can use the methode space.embed(...) or domain.space.embed(...) 
-        to create the dictionary.
-    output_data : list, tensor or array
-        The expected model values at the given input data.   
+    input_data : Points
+        A points object containing the input data for the model.
+    output_data : Points
+        The expected model values at the given input data in the
+        correct output space.
     """
 
     def __init__(self, input_data, output_data):
-        self._check_input_is_dict(input_data)
-        self.input_data = input_data
-        self.output_data = self._data_to_tensor(output_data)
-        n = self._extract_tensor_len_from_dict(input_data)
+        if isinstance(input_data, Points):
+            self.input_data = input_data
+        elif isinstance(input_data, dict):
+            self.input_data = Points.from_coordinates(input_data)
+        else:
+            raise TypeError("input_data should be one of Points or dict.")
+        if isinstance(output_data, Points):
+            self.output_data = output_data
+        elif isinstance(output_data, dict):
+            self.output_data = Points.from_coordinates(output_data)
+        else:
+            raise TypeError("output_data should be one of Points or dict.")
+        n = len(input_data)
+        assert len(output_data) == n
         super().__init__(n_points=n)
 
-    def _check_input_is_dict(self, input_data):
-        if not isinstance(input_data, dict):
-            raise TypeError(f"""The input_data has to be dictionary,
-                                but found {type(input_data)}. If the data is a
-                                list/array/tensor one can use the 'space.embed'
-                                methode to create the dictionary.""")
-    
-    def _data_dict_to_tensor_dict(self, data_dict):
-        tensor_dict = {}
-        for key, data in data_dict.items():
-            tensor_dict[key] = self._data_to_tensor(data)
-        return tensor_dict
-
-    def _data_to_tensor(self, init):
-        if isinstance(init, torch.Tensor):
-            data = init
-        elif isinstance(init, np.ndarray):
-            data = torch.from_numpy(init)
-        elif isinstance(init, (tuple, list)):
-            data = torch.Tensor(init)
-        elif isinstance(init, float):
-            data = torch.Tensor((init,))
-        elif isinstance(init, int):
-            data = torch.Tensor((float(init),))
-        return data
-
     def sample_points(self, **params):
-        return {**self.input_data, 'target': self.output_data}
+        return self.input_data, self.output_data

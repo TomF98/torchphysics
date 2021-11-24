@@ -36,6 +36,9 @@ class Space(Counter, OrderedDict):
     
     @property
     def variables(self):
+        """
+        A unordered (!) set of variables.
+        """
         return set(self.keys())
 
 

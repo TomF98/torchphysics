@@ -2,6 +2,7 @@ import warnings
 import torch
 
 from ..domain import Domain, BoundaryDomain
+from ...spaces import Points
 
 
 class UnionDomain(Domain):
@@ -50,7 +51,7 @@ class UnionDomain(Domain):
             points = self._sample_random_with_n(n, **params)
         else: # d not None
             points = self._sample_random_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_random_with_n(self, n, **params):
         # sample n points in both domains
@@ -123,7 +124,7 @@ class UnionDomain(Domain):
         points_a = self.domain_a.sample_grid(d=d, **params)
         points_b = self.domain_b.sample_grid(d=d, **params)      
         points = self._append_points(points_a, points_b, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     @property
     def boundary(self):
@@ -160,7 +161,7 @@ class UnionBoundaryDomain(BoundaryDomain):
             raise NotImplementedError
         else:
             points = self._sample_random_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_random_with_d(self, d, **params):
         points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d, **params)
@@ -182,7 +183,7 @@ class UnionBoundaryDomain(BoundaryDomain):
             raise NotImplementedError
         else:
             points = self._sample_grid_with_d(d, **params)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _sample_grid_with_d(self, d, **params):
         points_a = self.domain.domain_a.boundary.sample_grid(d=d, **params)

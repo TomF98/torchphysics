@@ -6,6 +6,7 @@ import warnings
 from .sampler_base import PointSampler
 from ..domains.domain1D import Interval
 from .random_samplers import RandomUniformSampler
+from ..spaces import Points
 
 
 class GridSampler(PointSampler):
@@ -99,7 +100,7 @@ class GridSampler(PointSampler):
         self._append_point_dict(new_points, random_points)
                             
 
-class SpacedGridSampler(PointSampler):
+class ExponentialIntervalSampler(PointSampler):
     """Will sample non equdistant grid points in the given interval.
     This works only on intervals!
 
@@ -139,4 +140,4 @@ class SpacedGridSampler(PointSampler):
             points = 1 - points**(1/self.exponent)
         interval_length = ub - lb
         points = points * interval_length + lb
-        return  self.domain.space.embed(points.reshape(-1, 1))
+        return Points(points.reshape(-1, 1), self.domain.space)

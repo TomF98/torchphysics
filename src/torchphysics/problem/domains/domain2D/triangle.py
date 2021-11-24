@@ -1,7 +1,7 @@
 import torch
 
 from ..domain import Domain, BoundaryDomain
-
+from ...spaces import Points
 
 class Triangle(Domain):
     '''Class for triangles.
@@ -98,7 +98,7 @@ class Triangle(Domain):
         points_in_dir_2 = -bary_coords[:, :, 1:] * dir_3[:, None]
         points = points_in_dir_1 + points_in_dir_2
         points += origin[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def _handle_sum_greater_1(self, d, bary_coords):
         sum_bigger_one = (bary_coords.sum(axis=2) >= 1)
@@ -126,7 +126,7 @@ class Triangle(Domain):
         points_in_dir_2 = -bary_coords[:, 1:] * dir_3
         points = points_in_dir_1 + points_in_dir_2
         points += origin
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def _compute_barycentric_grid(self, n, dir_1, dir_2):
         # since we have a triangle, we rmove later the points with bary.-
@@ -204,7 +204,7 @@ class TriangleBoundary(BoundaryDomain):
                                              side_1, side_2, side_3, 
                                              points, bound_location)
         points += origin[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def _compute_side_length(self, dir_1, dir_2, dir_3):
         side_length_1 = torch.linalg.norm(dir_1, dim=1).view(-1, 1, 1)
@@ -239,7 +239,7 @@ class TriangleBoundary(BoundaryDomain):
                                              side_1, side_2, side_3, 
                                              points, bound_location)
         points += origin[:, None, :]
-        return self.space.embed(points.reshape(-1, 2))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, **params):
         origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(**points, 

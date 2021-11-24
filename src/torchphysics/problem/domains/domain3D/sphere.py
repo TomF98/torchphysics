@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 from ..domain import Domain, BoundaryDomain
-
+from ...spaces import Points
 
 class Sphere(Domain):
     """Class for a sphere.
@@ -73,7 +73,7 @@ class Sphere(Domain):
         points = torch.cat((x, y, z), dim=2)
         # [:,None,:] is needed so that the correct entries will be added
         points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 3))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -88,7 +88,7 @@ class Sphere(Domain):
         else:
             points_inside = torch.empty((0, self.dim))
         finals_points = self._append_random(points_inside, n, params)
-        return self.space.embed(finals_points)
+        return Points(finals_points, self.space)
 
     def _point_grid_in_box(self, n, radius):
         scaled_n = int(np.ceil(np.cbrt(n*6/np.pi)))
@@ -144,7 +144,7 @@ class SphereBoundary(BoundaryDomain):
         z = torch.multiply(radius, torch.sin(theta))
         points = torch.cat((x, y, z), dim=2)
         points += center[:, None, :]
-        return self.space.embed(points.reshape(-1, 3))
+        return Points(points.reshape(-1, self.space.dim), self.space)
 
     def sample_grid(self, n=None, d=None, **params):
         if d:
@@ -165,7 +165,7 @@ class SphereBoundary(BoundaryDomain):
         # Translate to center and scale
         points *= radius.item()
         points = torch.add(points, center)
-        return self.space.embed(points)
+        return Points(points, self.space)
 
     def normal(self, points, **params):
         center, radius = self.domain._compute_center_and_radius(**params, **points)
