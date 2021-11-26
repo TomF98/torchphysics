@@ -26,7 +26,7 @@ class Point(Domain):
 
     def _contains(self, points, **params):
         point_params = self.point(**params, **points.coordinates)
-        points = self.space.as_tensor(points)
+        points = points.as_tensor
         inside = torch.isclose(points[:, None], point_params)
         return torch.all(inside, dim=2)
 

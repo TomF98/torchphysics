@@ -42,7 +42,8 @@ class ShapelyPolygon(Domain):
         return self
 
     def _contains(self, points, **params):
-        points = self.space.as_tensor(points)
+        if isinstance(points, Points):
+            points = points.as_tensor
         inside = torch.zeros(len(points), 1)
         for i in range(len(points)):
             point = s_geo.Point(points[i])
@@ -145,7 +146,7 @@ class ShapelyPolygon(Domain):
         points = bary_coords
         if len(bary_coords) < n:
             random_points = self.sample_random_uniform(n=(n - len(bary_coords)))
-            points = torch.cat((bary_coords, self.space.as_tensor(random_points)),
+            points = torch.cat((bary_coords, random_points.as_tensor),
                                 dim=0)
         return points
 
@@ -187,7 +188,7 @@ class ShapelyBoundary(BoundaryDomain):
         return self
 
     def _contains(self, points, **params):
-        points = self.space.as_tensor(points)
+        points = points.as_tensor
         on_bound = torch.empty(len(points), dtype=bool)
         for i in range(len(points)):
             point = s_geo.Point(points[i])
@@ -252,7 +253,7 @@ class ShapelyBoundary(BoundaryDomain):
         return new_point
 
     def normal(self, points, **params):
-        points = self.space.as_tensor(points)
+        points = points.as_tensor
         outline = self.domain.outline()
         index = self._where_on_boundary(points, outline)
         return self.normal_list[index]

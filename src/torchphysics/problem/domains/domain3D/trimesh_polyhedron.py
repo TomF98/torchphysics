@@ -148,7 +148,8 @@ class TrimeshPolyhedron(Domain):
         return torch.tensor(volume).reshape(-1, 1)
 
     def _contains(self, points, **params):
-        points = self.space.as_tensor(points)
+        if isinstance(points, Points):
+            points = points.as_tensor
         inside = self.mesh.contains(points).reshape(-1,1)
         return torch.tensor(inside)
 
@@ -210,7 +211,7 @@ class TrimeshBoundary(BoundaryDomain):
         super().__init__(domain)
 
     def _contains(self, points, **params):
-        points = self.space.as_tensor(points)
+        points = points.as_tensor
         distance = trimesh.proximity.signed_distance(self.domain.mesh, points)
         abs_dist = torch.absolute(torch.tensor(distance))
         on_bound = (abs_dist <= self.domain.tol)
@@ -234,7 +235,7 @@ class TrimeshBoundary(BoundaryDomain):
         return Points(points, self.space)
 
     def normal(self, points, **params):
-        points = self.space.as_tensor(points)
+        points = points.as_tensor
         index = self.domain.mesh.nearest.on_surface(points)[2]
         mesh_normals = torch.tensor(self.domain.mesh.face_normals)
         normals = torch.zeros((len(points), 3))

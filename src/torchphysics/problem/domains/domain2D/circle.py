@@ -31,8 +31,9 @@ class Circle(Domain):
         return Circle(space=self.space, center=new_center, radius=new_radius)
 
     def _contains(self, points, **params):
-        center, radius = self._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
+        center, radius = self._compute_center_and_radius(**points.coordinates,
+                                                         **params)
+        points = points.as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.le(norm[:, None], radius).reshape(-1, 1)
 
@@ -104,8 +105,9 @@ class CircleBoundary(BoundaryDomain):
         super().__init__(domain)
 
     def _contains(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
+        center, radius = self.domain._compute_center_and_radius(**points.coordinates,
+                                                                **params)
+        points = points.as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
@@ -134,8 +136,9 @@ class CircleBoundary(BoundaryDomain):
         return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
+        center, radius = self.domain._compute_center_and_radius(**points.coordinates,
+                                                                **params)
+        points = points.as_tensor
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 2)
 

@@ -36,8 +36,9 @@ class Sphere(Domain):
         return center,radius
 
     def _contains(self, points, **params):
-        center, radius = self._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
+        center, radius = self._compute_center_and_radius(**params,
+                                                         **points.coordinates)
+        points = points.as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.le(norm[:, None], radius).reshape(-1, 1)
 
@@ -106,7 +107,7 @@ class Sphere(Domain):
         if len(points_inside) == n:
             return points_inside
         random_points = self.sample_random_uniform(n=n-len(points_inside), **params)
-        random_points = self.space.as_tensor(random_points)
+        random_points = random_points.as_tensor
         return torch.cat((points_inside, random_points), dim=0)
 
     @property
@@ -121,8 +122,9 @@ class SphereBoundary(BoundaryDomain):
         super().__init__(domain)
 
     def _contains(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
+        center, radius = self.domain._compute_center_and_radius(**params,
+                                                                **points.coordinates)
+        points = points.as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
@@ -168,7 +170,8 @@ class SphereBoundary(BoundaryDomain):
         return Points(points, self.space)
 
     def normal(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params, **points)
-        points = self.space.as_tensor(points)
+        center, radius = self.domain._compute_center_and_radius(**params,
+                                                                **points.coordinates)
+        points = points.as_tensor
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 3)

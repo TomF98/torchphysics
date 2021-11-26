@@ -3,8 +3,9 @@ import torch
 import shapely.geometry as s_geo
 from shapely.ops import triangulate
 
-from torchphysics.problem.domains.domain2D.shapely_polygon import ShapelyPolygon, ShapelyBoundary
+from torchphysics.problem.domains.domain2D.shapely_polygon import ShapelyPolygon
 from torchphysics.problem.spaces import R2
+from torchphysics.problem.spaces.points import Points
 
 
 # Test ShapelyPolygon
@@ -63,7 +64,8 @@ def test_volume_of_poly2D():
 def test_inside_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]])
     points = torch.tensor([[5, 5], [0, 0], [10, 2.0], [-3, 4]])
-    inside = P._contains({'x': points})
+    points = Points(points, R2('x'))
+    inside = P._contains(points)
     assert inside[0]
     assert not inside[1]
     assert not inside[2]
@@ -73,7 +75,8 @@ def test_inside_poly2D():
 def test_on_boundary_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]])
     points = torch.tensor([[5, 5.0], [0, 0], [10, 2], [-3, 4], [0, 8]])
-    on_bound = P.boundary._contains({'x': points})
+    points = Points(points, R2('x'))
+    on_bound = P.boundary._contains(points)
     assert not on_bound[0]
     assert on_bound[1]
     assert on_bound[2]
@@ -84,14 +87,14 @@ def test_on_boundary_poly2D():
 def test_random_sampling_on_boundary_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]]).boundary
     points = P.sample_random_uniform(n=500)
-    assert points['x'].shape == (500, 2)
+    assert points[:, 'x'].shape == (500, 2)
     assert all(P._contains(points))
 
 
 def test_grid_sampling_on_boundary_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 0], [10, 10]]).boundary
     points = P.sample_grid(15)
-    assert points['x'].shape == (15, 2)
+    assert points[:, 'x'].shape == (15, 2)
     assert all(P._contains(points))
 
 
@@ -101,7 +104,7 @@ def test_random_sampling_on_boundary_for_hole_in_poly2D():
     P = ShapelyPolygon(R2('x'), shapely_polygon=p)
     H = ShapelyPolygon(R2('x'), shapely_polygon=h)
     points = P.boundary.sample_random_uniform(500)
-    assert points['x'].shape == (500, 2)
+    assert points[:, 'x'].shape == (500, 2)
     assert any(H.boundary._contains(points))    
     assert all(P.boundary._contains(points))
 
@@ -112,7 +115,7 @@ def test_grid_sampling_on_boundary_for_hole_in_poly2D():
     P = ShapelyPolygon(R2('x'), shapely_polygon=p)
     H = ShapelyPolygon(R2('x'), shapely_polygon=h)
     points = P.boundary.sample_grid(500)
-    assert points['x'].shape == (500, 2)
+    assert points[:, 'x'].shape == (500, 2)
     assert any(H.boundary._contains(points))    
     assert all(P.boundary._contains(points))
 
@@ -120,7 +123,7 @@ def test_grid_sampling_on_boundary_for_hole_in_poly2D():
 def test_random_sampling_inside_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]])
     points = P.sample_random_uniform(10, t=torch.tensor([[2.0], [1.1]]))
-    assert points['x'].shape == (20, 2)
+    assert points[:, 'x'].shape == (20, 2)
     assert all(P._contains(points))
 
 
@@ -133,13 +136,13 @@ def test_random_sampling_inside_poly2D_with_density():
 def test_random_sampling_inside_poly2D_2():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 0], [10, 10]])
     points = P.sample_random_uniform(50)
-    assert points['x'].shape == (50, 2)
+    assert points[:, 'x'].shape == (50, 2)
     assert all(P._contains(points))
     P = ShapelyPolygon(R2('x'), [[0, 0], [0.3, 0], [0.3, 0.9], [0.5, 0.9], [0.5, 0.85], 
                    [1, 0.85], [1, 0.1], [0.4, 0.1], [0.4, 0], [2, 0], 
                    [2, 1], [0, 1]])
     points = P.sample_random_uniform(50)
-    assert points['x'].shape == (50, 2)
+    assert points[:, 'x'].shape == (50, 2)
     assert all(P._contains(points))
 
 
@@ -168,14 +171,14 @@ def test_bounds_for_poly2D():
 def test_grid_sampling_inside_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]])
     points = P.sample_grid(250)
-    assert points['x'].shape == (250, 2)
+    assert points[:, 'x'].shape == (250, 2)
     assert all(P._contains(points))
 
 
 def test_grid_sampling_inside_poly2D_no_extra_points():
     P = ShapelyPolygon(R2('x'), [[0, 1], [1, 1], [1, 0], [0, 0]])
     points = P.sample_grid(100)
-    assert points['x'].shape == (100, 2)
+    assert points[:, 'x'].shape == (100, 2)
     assert all(P._contains(points))
 
 
@@ -189,13 +192,14 @@ def test_random_sampling_inside_concav_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 0], [0, -5], [-10, -5], [-10, -10], [10, -10],
                    [10, 10], [-10, 10], [-10, 0]])
     points = P.sample_grid(263)
-    assert points['x'].shape == (263, 2)
+    assert points[:, 'x'].shape == (263, 2)
     assert all(P._contains(points))
 
 
 def test_boundary_normal_for_concav_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 0], [0, -10], [10, -10], [10, 10], [-10, 10], [-10, 0]])
     points = torch.tensor([[0, -5], [5, -10], [5, 10], [-10, 7], [-4, 0], [10, 0]])
+    points = Points(points, R2('x'))
     normals = P.boundary.normal(points)
     assert torch.allclose(normals[0], torch.tensor([-1.0, 0]))
     assert torch.allclose(normals[1], torch.tensor([0.0, -1]))
@@ -208,6 +212,7 @@ def test_boundary_normal_for_concav_poly2D():
 def test_boundary_normal_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]])
     points = torch.tensor([[0, 5], [10, 5], [1, 2.0/10], [9, 8+2.0/10]])
+    points = Points(points, R2('x'))
     normals = P.boundary.normal(points)
     assert torch.allclose(normals[0], torch.tensor([-1.0, 0]))
     assert torch.allclose(normals[1], torch.tensor([1.0, 0]))
@@ -221,6 +226,7 @@ def test_boundary_normal_poly2D_with_hole():
     p = s_geo.Polygon(shell=[[0, 0], [1, 0], [0, 1]], holes=[h.exterior.coords])
     P = ShapelyPolygon(R2('x'), shapely_polygon=p)
     points = torch.tensor([[0.5, 0], [0, 0.5], [0.2, 0.15]])
+    points = Points(points, R2('x'))
     normals = P.boundary.normal(points)
     assert normals.shape == (3, 2)
     assert torch.allclose(normals[0], torch.tensor([0.0, -1]))
