@@ -13,6 +13,13 @@ class Points():
         assert self._t.shape[1] == self.space.dim
     
     @classmethod
+    def empty(cls, **kwargs):
+        """
+        Creates an empty Points object.
+        """
+        return cls(torch.empty(0,0, **kwargs), Space({}))
+
+    @classmethod
     def from_coordinates(cls, coords):
         """Concatenates sample coordinates from a dict to create a point
         object.
@@ -38,7 +45,7 @@ class Points():
         if n == 1:
             return Point(torch.column_stack(point_list), Space(space))
         else:
-            return Points(torch.column_stack(point_list), Space(space))
+            return cls(torch.column_stack(point_list), Space(space))
     
     @property
     def dim(self):

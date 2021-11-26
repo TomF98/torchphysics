@@ -3,6 +3,6 @@
 from .sampler_base import (PointSampler, ProductSampler, 
                            ConcatSampler, AppendSampler)
 from .random_samplers import RandomUniformSampler, GaussianSampler, LHSSampler
-from .grid_samplers import GridSampler, SpacedGridSampler
+from .grid_samplers import GridSampler, ExponentialIntervalSampler
 from .plot_samplers import PlotSampler
 from .data_samplers import DataSampler
