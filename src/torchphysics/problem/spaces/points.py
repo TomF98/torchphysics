@@ -36,16 +36,15 @@ class Points():
         """
         point_list = []
         space = {}
+        if coords == {}:
+            return cls.empty()
         n = coords[list(coords.keys())[0]].shape[0]
         for vname in coords:
             coords[vname] = torch.as_tensor(coords[vname])
             assert coords[vname].shape[0] == n
             point_list.append(coords[vname])
             space[vname] = coords[vname].shape[1]
-        if n == 1:
-            return Point(torch.column_stack(point_list), Space(space))
-        else:
-            return cls(torch.column_stack(point_list), Space(space))
+        return cls(torch.column_stack(point_list), Space(space))
     
     @property
     def dim(self):
@@ -82,48 +81,45 @@ class Points():
     
     def __len__(self):
         return self._t.shape[0]
+    
+    @property
+    def isempty(self):
+        return len(self) > 0 and self.space.dim == 0
 
     def __repr__(self):
         return "{}:\n{}".format(self.__class__.__name__, self.coordinates)
     
     def __getitem__(self, val):
         """
-        Supports operations like points[1:3,'x']. If a variable is given,
-        this will return a torch.Tensor with the data. If not, it will return
-        a new, sliced, point.
+        Supports usual slice operations like points[1:3,('x','t')]. If a variable
+        is given, this will return a torch.Tensor with the data. If not, it will
+        return a new, sliced, point.
 
         Notes
         -----
         This operation does not support slicing single dimensions from a
         variable directly, however, this can be done on the output.
         """
+        # first axis
         val = tuple(val)
-        out = self._t[val[0],:]
-
-        if len(val) == 2:
-            if isinstance(val[1], str):
-                if val[1] in self.variables:
-                    if isinstance(val[0], slice):
-                        out = out[:, self._variable_slices[val[1]]]
-                    elif isinstance(val[0], int):
-                        out = out[self._variable_slices[val[1]]]
-                    return out
-                raise KeyError(f"Variable {val[1]} does not exist.")
-            elif isinstance(val[1], slice):
-                if val[1] != slice(None, None, None):
-                    raise TypeError("Slicing is not supported for variable-dimension.")
-            else:
-                raise TypeError("Wrong type for indexing or slicing.")
-        if len(val) > 2:
-            raise IndexError("too many indices for Points (max. 3 indices).")
-
-        if isinstance(val[0], slice):
-            return Points(out, self.space)
-        elif isinstance(val[0], int):
-            return Point(out, self.space)
+        if isinstance(val[0], int):
+            # keep tensor dimension
+            out = self._t[val[0]:val[0]+1,:]
         else:
-            raise TypeError(f"{val[0]} should be slice or int.")
+            out = self._t[val[0],:]
+        out_space = self.space
 
+        # second axis
+        if len(val) == 2:
+            out_space = out_space[val[1]]
+            slc = self._variable_slices
+            rng = list(range(self.dim))
+            out_idxs = []
+            for var in out_space:
+                out_idxs += rng[slc[var]]
+            out = out[:,out_idxs]
+
+        return Points(out, out_space)
     
     def __iter__(self):
         """
@@ -132,7 +128,7 @@ class Points():
         slow) loops.
         """
         for i in range(len(self)):
-            yield Point(self._t[i,:], self.space)
+            yield Points(self._t[i,:], self.space)
 
     def __eq__(self, other):
         return self.space == other.space and self._t == other._t
@@ -164,11 +160,19 @@ class Points():
     
     def __or__(self, other):
         assert isinstance(other, Points)
+        if self.isempty:
+            return other
+        if other.isempty:
+            return self
         assert other.space == self.space
         return Points(torch.cat([self._t, other._t], dim=0), self.space)
     
     def join(self, other):
         assert isinstance(other, Points)
+        if self.isempty:
+            return other
+        if other.isempty:
+            return self
         assert self.space.keys().isdisjoint(other.space)
         return Points(torch.cat([self._t, other._t], dim=1), self.space * other.space)
 
@@ -186,13 +190,3 @@ class Points():
         assert all(space == spaces[0] for space in spaces)
         ret = func(*args_list, **kwargs)
         return Points(ret, spaces[0])
-
-
-class Point(Points):
-    def __init__(self, data, space, **kwargs):
-        data = torch.as_tensor(data, **kwargs)
-        if len(data.shape) == 1:
-            super().__init__(data.unsqueeze(0), space)
-        elif len(data.shape) == 2:
-            assert data.shape[0] == 1
-            super().__init__(data, space)

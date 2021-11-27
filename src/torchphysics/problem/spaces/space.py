@@ -1,4 +1,5 @@
 from collections import Counter, OrderedDict
+from typing import Iterable
 
 import torch
 
@@ -24,9 +25,13 @@ class Space(Counter, OrderedDict):
     def __getitem__(self, val):
         if isinstance(val, slice):
             keys = list(self.keys())
-            new_slice = slice(keys.index(val.start),keys.index(val.stop), val.step)
+            new_slice = slice(keys.index(val.start) if val.start is not None else None,
+                              keys.index(val.stop) if val.stop is not None else None,
+                              val.step)
             new_keys = keys[new_slice]
             return Space({k: self[k] for k in new_keys})
+        if isinstance(val, list) or isinstance(val, tuple):
+            return Space({k: self[k] for k in val})
         else:
             return super().__getitem__(val)
 
