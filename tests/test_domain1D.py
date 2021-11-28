@@ -53,7 +53,8 @@ def test_bounding_box_interval():
 
 def test_bounding_box_interval_variable_bounds():
     I = Interval(R1('x'), lower_bound=lower_bound, upper_bound=upper_bound)
-    bounds = I.bounding_box(t=torch.tensor([1, 2, 3, 4]).reshape(-1, 1))
+    time = Points(torch.tensor([1, 2, 3, 4]).reshape(-1, 1), R1('t'))
+    bounds = I.bounding_box(time)
     assert bounds[0] == -4
     assert bounds[1] == 9
 
@@ -73,14 +74,15 @@ def test_interval_volume():
 
 def test_interval_volume_bounds_change():
     I = Interval(R1('x'), 0, lambda t : t+1)
-    assert all(I._get_volume(t=torch.tensor([[2.], [1]])) == torch.tensor([[3.0], [2.0]]))
+    t = Points(torch.tensor([[2.], [1]]), R1('t'))
+    assert all(I._get_volume(t) == torch.tensor([[3.0], [2.0]]))
 
 
 def test_interval_contains_if_one_bound_changes():
     I = Interval(R1('x'), 0, upper_bound)
     points = Points(torch.tensor([0.5, 0, 7, -2, -0.1]).reshape(-1, 1), R1('x'))
-    time = torch.tensor([0, 0, 1, -2, -0.1]).reshape(-1, 1)
-    inside = I._contains(points, t=time)
+    time = Points(torch.tensor([0, 0, 1, -2, -0.1]).reshape(-1, 1), R1('t'))
+    inside = I._contains(points, time)
     assert all(inside[:2])
     assert not any(inside[2:])
 
@@ -88,8 +90,8 @@ def test_interval_contains_if_one_bound_changes():
 def test_interval_contains_if_both_bound_changes():
     I = Interval(R1('x'), lower_bound, upper_bound)
     points = Points(torch.tensor([0.5, -1, 7, -2, -0.1]).reshape(-1, 1), R1('x'))
-    time = torch.tensor([0, 2, 1, -2, -0.1]).reshape(-1, 1)
-    inside = I._contains(points, t=time)
+    time = Points(torch.tensor([0, 2, 1, -2, -0.1]).reshape(-1, 1), R1('t'))
+    inside = I._contains(points, time)
     assert all(inside[:2])
     assert not any(inside[2:])
 
@@ -97,7 +99,7 @@ def test_interval_contains_if_both_bound_changes():
 def test_interval_random_sampling_with_n():
     I = Interval(R1('x'), 0, 1)
     points = I.sample_random_uniform(n=10)
-    assert points[:, 'x'].shape == (10, 1)
+    assert points.as_tensor.shape == (10, 1)
     assert all(I._contains(points))
 
 
@@ -115,27 +117,29 @@ def test_interval_grid_sampling_with_d():
 
 def test_interval_random_sampling_with_n_and_variable_bounds():
     I = Interval(R1('x'), 0, upper_bound)
-    points = I.sample_random_uniform(n=4, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points[:, 'x'].shape == (8, 1)
-    assert all(I._contains(points, t=torch.tensor([0, 0, 0, 0, 1, 1, 1, 1]).reshape(-1, 1)))
+    t = Points(torch.tensor([0, 1]).reshape(-1, 1), R1('t'))
+    points = I.sample_random_uniform(n=4, params=t)
+    assert points.as_tensor.shape == (8, 1)
+    assert all(I._contains(points, torch.repeat_interleave(t, 4, dim=0)))
 
 
 def test_interval_grid_sampling_with_n():
     I = Interval(R1('x'), 0, 1)
     points = I.sample_grid(n=10)
-    assert points[:, 'x'].shape == (10, 1)
+    assert points.as_tensor.shape == (10, 1)
     assert all(I._contains(points))
     for i in range(8):
-        dist_1 = torch.linalg.norm(points[:, 'x'][i+1] - points[:, 'x'][i])
-        dist_2 = torch.linalg.norm(points[:, 'x'][i+1] - points[:, 'x'][i+2])
+        dist_1 = torch.linalg.norm(points.as_tensor[i+1] - points.as_tensor[i])
+        dist_2 = torch.linalg.norm(points.as_tensor[i+1] - points.as_tensor[i+2])
         assert torch.isclose(dist_1, dist_2)
 
 
 def test_interval_grid_sampling_with_n_and_variable_bounds():
     I = Interval(R1('x'), 0, upper_bound)
-    points = I.sample_grid(n=4, t=torch.tensor([0, 1]).reshape(-1, 1))
-    assert points[:, 'x'].shape == (8, 1)
-    assert all(I._contains(points, t=torch.tensor([0, 0, 0, 0, 1, 1, 1, 1]).reshape(-1, 1)))
+    t = Points(torch.tensor([0, 1]).reshape(-1, 1), R1('t'))
+    points = I.sample_grid(n=4, params=t)
+    assert points.as_tensor.shape == (8, 1)
+    assert all(I._contains(points, torch.repeat_interleave(t, 4, dim=0)))
 
 
 def test_get_Intervalboundary():
@@ -169,8 +173,8 @@ def test_interval_boundary_contains():
 def test_interval_boundary_contains_if_bound_changes():
     I = Interval(R1('x'), 0, upper_bound).boundary
     points = Points(torch.tensor([0, 1, 0, 4, -1, 12.0]).reshape(-1, 1), R1('x'))
-    time = torch.tensor([0, 0, 1, 1, 1, 2.0]).reshape(-1, 1)
-    inside = I._contains(points, t=time)
+    time = Points(torch.tensor([0, 0, 1, 1, 1, 2.0]).reshape(-1, 1), R1('t'))
+    inside = I._contains(points, params=time)
     assert all(inside[:3])
     assert not any(inside[3:])
 
@@ -178,7 +182,7 @@ def test_interval_boundary_contains_if_bound_changes():
 def test_interval_boundary_random_sampling_with_n():
     I = Interval(R1('x'), 0, 1).boundary
     points = I.sample_random_uniform(n=10)
-    assert points[:, 'x'].shape == (10, 1)
+    assert points.as_tensor.shape == (10, 1)
     assert all(I._contains(points))
 
 
@@ -197,26 +201,28 @@ def test_interval_boundary_grid_sampling_with_d():
 def test_interval_boundary_grid_sampling_with_n():
     I = Interval(R1('x'), 0, 1).boundary
     points = I.sample_grid(n=10)
-    assert points[:, 'x'].shape == (10, 1)
+    assert points.as_tensor.shape == (10, 1)
     assert all(I._contains(points))
     for i in range(10):
-        point_eq_0 = points[:, 'x'][i] == 0
-        point_eq_1 = points[:, 'x'][i] == 1
+        point_eq_0 = points.as_tensor[i] == 0
+        point_eq_1 = points.as_tensor[i] == 1
         assert point_eq_0 or point_eq_1 
 
 
 def test_interval_boundary_random_sampling_with_n_and_variable_bounds():
     I = Interval(R1('x'), 0, upper_bound).boundary
-    points = I.sample_random_uniform(n=2, t=torch.tensor([0.0, 1.0, 2]).reshape(-1, 1))
-    assert points[:, 'x'].shape == (6, 1)
-    assert all(I._contains(points, t=torch.tensor([0, 0, 1.0, 1, 2, 2]).reshape(-1, 1)))
+    time = Points(torch.tensor([0.0, 1.0, 2]).reshape(-1, 1), R1('t'))
+    points = I.sample_random_uniform(n=2, params=time)
+    assert points.as_tensor.shape == (6, 1)
+    assert all(I._contains(points, torch.repeat_interleave(time, 2, dim=0)))
 
 
 def test_interval_boundary_grid_with_n_and_variable_bounds():
     I = Interval(R1('x'), 0, upper_bound).boundary
-    points = I.sample_grid(n=4, t=torch.tensor([0.0, 1.0]).reshape(-1, 1))
-    assert points[:, 'x'].shape == (8, 1)
-    assert all(I._contains(points, t=torch.tensor([0, 0, 0, 0, 1.0, 1, 1, 1]).reshape(-1, 1)))
+    time = Points(torch.tensor([0.0, 1.0]).reshape(-1, 1), R1('t'))
+    points = I.sample_grid(n=4, params=time)
+    assert points.as_tensor.shape == (8, 1)
+    assert all(I._contains(points, torch.repeat_interleave(time, 4, dim=0)))
 
 
 def test_interval_normals():
@@ -229,8 +235,9 @@ def test_interval_normals():
 
 def test_interval_normals_if_bounds_change():
     I = Interval(R1('x'), lower_bound, 1).boundary
+    time = Points(torch.tensor([0, 0, 1, 1, 2.0]).reshape(-1, 1), R1('t'))
     points = Points(torch.tensor([0, 1.0, -1, 1, -2]).reshape(-1, 1), R1('x'))
-    normals = I.normal(points, t=torch.tensor([0, 0, 1, 1, 2.0]).reshape(-1, 1))
+    normals = I.normal(points, params=time)
     assert normals.shape == (5, 1)
     assert all(torch.isclose(torch.tensor([[-1], [1], [-1], [1], [-1]]), normals))
 
@@ -265,7 +272,8 @@ def test_single_interval_bound_contains():
 def test_single_interval_bound_contains_if_bound_variable():
     I = Interval(R1('x'), 0, upper_bound).boundary_right
     points = Points(torch.tensor([[5.0], [1.0], [3.9]]), R1('x'))
-    inside = I._contains(points, t=torch.tensor([[2.0], [0.0], [-1.0]]))
+    time = Points(torch.tensor([[2.0], [0.0], [-1.0]]), R1('t'))
+    inside = I._contains(points, params=time)
     assert inside.shape == (3, 1)
     assert all(inside[:2])
     assert not any(inside[2])   
@@ -282,41 +290,44 @@ def test_single_interval_bound_bounding_box():
 def test_single_interval_bound_random_sampling_with_n():
     I = Interval(R1('x'), 0, 4).boundary_left
     points = I.sample_random_uniform(n=25)
-    assert points[:, 'x'].shape == (25, 1)
-    assert all(torch.isclose(points[:, 'x'], torch.tensor(0.0)))
+    assert points.as_tensor.shape == (25, 1)
+    assert all(torch.isclose(points.as_tensor, torch.tensor(0.0)))
 
 
 def test_single_interval_bound_random_sampling_with_d():
     I = Interval(R1('x'), 0, 4).boundary_left
     points = I.sample_random_uniform(d=0.1)
-    assert all(torch.isclose(points[:, 'x'], torch.tensor(0.0)))
+    assert all(torch.isclose(points.as_tensor, torch.tensor(0.0)))
 
 
 def test_single_interval_bound_random_sampling_with_n_moving_bound():
     I = Interval(R1('x'), lower_bound, 4).boundary_left
-    points = I.sample_random_uniform(n=25, t=torch.tensor([[1.0], [0.0]]))
-    assert points[:, 'x'].shape == (50, 1)
-    assert all(torch.isclose(points[:, 'x'][:25], torch.tensor(-1.0)))
-    assert all(torch.isclose(points[:, 'x'][25:], torch.tensor(0.0)))
+    time = Points(torch.tensor([[1.0], [0.0]]), R1('t'))
+    points = I.sample_random_uniform(n=25, params=time)
+    assert points.as_tensor.shape == (50, 1)
+    assert all(torch.isclose(points.as_tensor[:25], torch.tensor(-1.0)))
+    assert all(torch.isclose(points.as_tensor[25:], torch.tensor(0.0)))
 
 
 def test_single_interval_bound_grid_sampling_with_n():
     I = Interval(R1('x'), 0, 4).boundary_left
     points = I.sample_grid(n=25)
-    assert points[:, 'x'].shape == (25, 1)
-    assert all(torch.isclose(points[:, 'x'], torch.tensor(0.0)))
+    assert points.as_tensor.shape == (25, 1)
+    assert all(torch.isclose(points.as_tensor, torch.tensor(0.0)))
 
 
 def test_interval_normals_left_side():
     I = Interval(R1('x'), 0, 1).boundary_left
-    normals = I.normal({'x': torch.tensor([0, 0.0, 0]).reshape(-1, 1)})
+    points = Points(torch.tensor([0, 0.0, 0]).reshape(-1, 1), R1('x'))
+    normals = I.normal(points)
     assert normals.shape == (3, 1)
     assert all(torch.isclose(torch.tensor([[-1], [-1.0], [-1]]), normals))
 
 
 def test_interval_normals_ride_side():
     I = Interval(R1('x'), 0, 1).boundary_right
-    normals = I.normal({'x': torch.tensor([1, 1.0, 1]).reshape(-1, 1)})
+    points = Points(torch.tensor([1, 1.0, 1]).reshape(-1, 1), R1('x'))
+    normals = I.normal(points)
     assert normals.shape == (3, 1)
     assert all(torch.isclose(torch.tensor([[1], [1.0], [1]]), normals))
 

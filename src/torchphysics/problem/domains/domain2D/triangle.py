@@ -40,23 +40,23 @@ class Triangle(Domain):
                 return domain_param[0, :]
         return domain_param
 
-    def _get_volume(self, **params):
-        _, _, _, dir_1, _, dir_3 = self._construct_triangle(**params)
+    def _get_volume(self, params=Points.empty()):
+        _, _, _, dir_1, _, dir_3 = self._construct_triangle(params)
         # volume equals the determinate of the matrix [dir_1, dir_2] / 2
         volume = -dir_1[:, :1] * dir_3[:, 1:] + dir_1[:, 1:] * dir_3[:, :1]
         return volume / 2.0
 
-    def _construct_triangle(self, **params):
-        origin = self.origin(**params).reshape(-1, 2)
-        corner_1 = self.corner_1(**params).reshape(-1, 2)
-        corner_2 = self.corner_2(**params).reshape(-1, 2)
+    def _construct_triangle(self, params=Points.empty()):
+        origin = self.origin(params).reshape(-1, 2)
+        corner_1 = self.corner_1(params).reshape(-1, 2)
+        corner_2 = self.corner_2(params).reshape(-1, 2)
         dir_1 = corner_1 - origin
         dir_2 = corner_2 - corner_1
         dir_3 = origin - corner_2
         return origin, corner_1, corner_2, dir_1, dir_2, dir_3
 
-    def bounding_box(self, **params):
-        origin, corner_1, corner_2, _, _, _ = self._construct_triangle(**params)
+    def bounding_box(self, params=Points.empty()):
+        origin, corner_1, corner_2, _, _, _ = self._construct_triangle(params)
         bounds = []
         for i in range(self.dim):
             dim_i_max, dim_i_min = [], []
@@ -67,10 +67,10 @@ class Triangle(Domain):
             bounds.append(max(dim_i_max))
         return bounds
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         origin, _, _, dir_1, _, dir_3 = \
-            self._construct_triangle(**points.coordinates, **params)
-        points = points.as_tensor
+            self._construct_triangle(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         points -= origin
         bary_x, bary_y = self._solve_lgs(points, dir_1, -dir_3)
         greater_0 = torch.logical_and(0 <= bary_x, 0 <= bary_y)
@@ -88,11 +88,11 @@ class Triangle(Domain):
         bary_y = torch.divide(y_dir, det)
         return bary_x, bary_y
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = 2*self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = 2*self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(params)
+        num_of_params = self.len_of_params(params)
         bary_coords = torch.rand((num_of_params, n, 2))
         bary_coords = self._handle_sum_greater_1(d, bary_coords)
         points_in_dir_1 = bary_coords[:, :, :1] * dir_1[:, None]
@@ -114,10 +114,10 @@ class Triangle(Domain):
                                             bary_coords[index])
         return bary_coords
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(params)
         bary_coords = self._compute_barycentric_grid(n, dir_1, dir_3)
         if not d: 
             # if the number of points is specified we have to be sure to sample
@@ -168,16 +168,16 @@ class TriangleBoundary(BoundaryDomain):
         assert isinstance(domain, Triangle)
         super().__init__(domain)
 
-    def _get_volume(self, **params):
-        _, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(**params)
+    def _get_volume(self, params=Points.empty()):
+        _, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params)
         side_1, side_2, side_3 = self._compute_side_length(dir_1, dir_2, dir_3)
         side_length = side_1 + side_2 + side_3
         return side_length.reshape(-1, 1)
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         origin, _, _, dir_1, _, dir_3 = \
-            self.domain._construct_triangle(**points.coordinates, **params)
-        points = points.as_tensor
+            self.domain._construct_triangle(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         points -= origin
         bary_x, bary_y = self.domain._solve_lgs(points, dir_1, -dir_3)
         x_close_to_0 = self._bary_coords_close_to_0_or_1(bary_x, bary_y)
@@ -191,14 +191,14 @@ class TriangleBoundary(BoundaryDomain):
         close_to_0 = torch.isclose(bary_coord1, torch.tensor(0.0))
         return torch.logical_and(close_to_0, between_0_1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         # general idea is the same as in the parallelogram class. 
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params)
         side_1, side_2, side_3 = self._compute_side_length(dir_1, dir_2, dir_3)
         total_length = side_1 + side_2 + side_3
-        num_of_params = self.get_num_of_params(**params)
+        num_of_params = self.len_of_params(params)
         points = torch.zeros((num_of_params, n, 2))
         bound_location = torch.rand((num_of_params, n, 1)) * total_length
         self._transform_interval_to_boundary(dir_1, dir_2, dir_3, 
@@ -225,13 +225,13 @@ class TriangleBoundary(BoundaryDomain):
         points += scale * dir[:, None]
         bound_location -= side_length
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params)
         side_1, side_2, side_3 = self._compute_side_length(dir_1, dir_2, dir_3)
         total_length = side_1 + side_2 + side_3
-        num_of_params = self.get_num_of_params(**params)
+        num_of_params = self.len_of_params(params)
         points = torch.zeros((num_of_params, n, 2))
         bound_grid = torch.linspace(0, 1, n+1)[:-1] # last point would be double
         bound_grid = bound_grid.repeat(num_of_params).view(num_of_params, n, 1) 
@@ -242,10 +242,10 @@ class TriangleBoundary(BoundaryDomain):
         points += origin[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def normal(self, points, **params):
+    def normal(self, points, params=Points.empty()):
         origin, _, _, dir_1, dir_2, dir_3 = \
-            self.domain._construct_triangle(**points.coordinates, **params)
-        points = points.as_tensor
+            self.domain._construct_triangle(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         normals = torch.zeros_like(points)
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, -dir_3)
         normal_dir_1 = self._get_normal_direction(dir_1)

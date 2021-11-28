@@ -41,7 +41,7 @@ class ShapelyPolygon(Domain):
     def __call__(self, **data):
         return self
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         if isinstance(points, Points):
             points = points.as_tensor
         inside = torch.zeros(len(points), 1)
@@ -54,11 +54,11 @@ class ShapelyPolygon(Domain):
         bounds = self.polygon.bounds
         return [bounds[0], bounds[2], bounds[1], bounds[3]]
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         volume = self.polygon.area
         return torch.tensor(volume).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         n = self._compute_number_of_points(n, d, params)
         points = torch.empty((0, self.dim))
         big_t, biggest_area = None, 0
@@ -112,7 +112,7 @@ class ShapelyPolygon(Domain):
             points = torch.cat((points, new_points), dim=0)
         return points
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         n = self._compute_number_of_points(n, d, params)
         points = self._create_points_in_bounding_box(n)
         points = self._delete_outside(points)
@@ -152,8 +152,8 @@ class ShapelyPolygon(Domain):
 
     def _compute_number_of_points(self, n, d, params):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        num_of_params = self.len_of_params(params)
         n *= num_of_params
         return n
 
@@ -187,7 +187,7 @@ class ShapelyBoundary(BoundaryDomain):
     def __call__(self, **data):
         return self
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         points = points.as_tensor
         on_bound = torch.empty(len(points), dtype=bool)
         for i in range(len(points)):
@@ -196,16 +196,16 @@ class ShapelyBoundary(BoundaryDomain):
             on_bound[i] = (abs(distance) <= self.tol)
         return on_bound.reshape(-1, 1)
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         volume = self.domain.polygon.boundary.length 
         return torch.tensor(volume).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         n = self.domain._compute_number_of_points(n, d, params)
         line_points = torch.rand(n) * self.domain.polygon.boundary.length 
         return self._transform_points_to_boundary(n, torch.sort(line_points).values)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         n = self.domain._compute_number_of_points(n, d, params)
         line_points = torch.linspace(0, self.domain.polygon.boundary.length, n+1)[:-1]
         return self._transform_points_to_boundary(n, line_points)
@@ -252,7 +252,7 @@ class ShapelyBoundary(BoundaryDomain):
                      (corners[corner_index+1] - corners[corner_index]))
         return new_point
 
-    def normal(self, points, **params):
+    def normal(self, points, params=Points.empty()):
         points = points.as_tensor
         outline = self.domain.outline()
         index = self._where_on_boundary(points, outline)

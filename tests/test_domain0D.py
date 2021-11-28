@@ -6,6 +6,7 @@ from torchphysics.problem.domains.domain0D.point import Point
 from torchphysics.problem.spaces.space import R1, R2, R3
 from torchphysics.problem.spaces.points import Points
 
+
 def p(t):
     return 2*t
 
@@ -69,27 +70,28 @@ def test_point_contains():
 def test_point_contains_if_point_variable():
     P = Point(R1('x'), p)
     points = Points(torch.tensor([[4.0], [0.0], [3.9]]), R1('x'))
-    inside = P._contains(points, t=torch.tensor([[2.0], [0.0], [-1.0]]))
+    time = Points(torch.tensor([[2.0], [0.0], [-1.0]]), R1('t'))
+    inside = P._contains(points, time)
     assert inside.shape == (3, 1)
     assert all(inside[:2])
     assert not any(inside[2])   
 
 
 def test_point_contains_in_higher_dim():
-    P = Point(R1('x')*R2('y'), [4.0, 0.0, 3.0])
+    P = Point(R3('y'), [4.0, 0.0, 3.0])
     points = Points(torch.tensor([[4.0, 0.0, 3.0], [0.0, 0.0, 3.0],
-                                  [3.9, 2.0, 8.0], [4.0, 1.0, 3.0]]), R1('x')*R2('y'))
+                                  [3.9, 2.0, 8.0], [4.0, 1.0, 3.0]]), R3('y'))
     inside = P._contains(points)
     assert inside.shape == (4, 1)
-    assert inside[0]
+    assert inside[:1]
     assert not any(inside[1:])
 
 
 def test_point_contains_higher_dim_and_variable():
     P = Point(R2('x'), p2)
-    points = Points(torch.tensor([[1.0, 0.0], [3.0, 1.0],
-                                  [-1.0, 0.0], [2.0, 5.0]]), R2('x'))
-    inside = P._contains(points, t=torch.tensor([[1/2.0], [1.0], [0.0], [1.0]]))
+    points = Points(torch.tensor([[1.0, 0.0, 0.5], [3.0, 1.0, 1.0],
+                                  [-1.0, 0.0, 0.0], [2.0, 5.0, 1.0]]), R2('x')*R1('t'))
+    inside = P._contains(points)
     assert inside[0]
     assert not any(inside[1:])
 
@@ -116,7 +118,7 @@ def test_point_bounding_box_higher_dim():
 
 def test_point_bounding_box_moving_point():
     P = Point(R1('x'), p)
-    bounds = P.bounding_box(t=torch.tensor([[1.0], [9.0], [2]]))
+    bounds = P.bounding_box(Points(torch.tensor([[1.0], [9.0], [2]]), R1('t')))
     assert len(bounds) == 2
     assert bounds[0] == 2
     assert bounds[1] == 18
@@ -124,7 +126,7 @@ def test_point_bounding_box_moving_point():
 
 def test_point_bounding_box_moving_point_higher_dim():
     P = Point(R2('x'), p2)
-    bounds = P.bounding_box(t=torch.tensor([[1.0], [9.0], [2]]))
+    bounds = P.bounding_box(Points(torch.tensor([[1.0], [9.0], [2]]), R1('t')))
     assert len(bounds) == 4
     assert bounds[0] == 2
     assert bounds[1] == 18
@@ -134,45 +136,47 @@ def test_point_bounding_box_moving_point_higher_dim():
 
 def test_point_random_sampling_with_n():
     P = Point(R1('x'), 4)
-    points = P.sample_random_uniform(n=25)
-    assert points[:, 'x'].shape == (25, 1)
-    assert all(torch.isclose(points[:, 'x'], torch.tensor(4.0)))
+    points = P.sample_random_uniform(n=25).as_tensor
+    assert points.shape == (25, 1)
+    assert all(torch.isclose(points, torch.tensor(4.0)))
 
 
 def test_point_random_sampling_with_d():
     P = Point(R1('x'), 4)
-    points = P.sample_random_uniform(d=0.3)
-    assert all(torch.isclose(points[:, 'x'], torch.tensor(4.0)))
+    points = P.sample_random_uniform(d=0.3).as_tensor
+    assert all(torch.isclose(points, torch.tensor(4.0)))
 
 
-def test_point_random_sampling_with_nigher_dim():
+def test_point_random_sampling_with_higher_dim():
     P = Point(R3('x'), [4.0, 0.0, 1.3])
-    points = P.sample_random_uniform(n=25)
-    assert points[:, 'x'].shape == (25, 3)
-    assert all(torch.isclose(points[:, 'x'][:, 0], torch.tensor(4.0)))
-    assert all(torch.isclose(points[:, 'x'][:, 1], torch.tensor(0.0)))
-    assert all(torch.isclose(points[:, 'x'][:, 2], torch.tensor(1.3)))
+    points = P.sample_random_uniform(n=25).as_tensor
+    assert points.shape == (25, 3)
+    assert all(torch.isclose(points[:, 0], torch.tensor(4.0)))
+    assert all(torch.isclose(points[:, 1], torch.tensor(0.0)))
+    assert all(torch.isclose(points[:, 2], torch.tensor(1.3)))
 
 
 def test_point_random_sampling_with_n_moving_point():
     P = Point(R1('x'), p)
-    points = P.sample_random_uniform(n=25, t=torch.tensor([[1.0], [0.0]]))
-    assert points[:, 'x'].shape == (50, 1)
-    assert all(torch.isclose(points[:, 'x'][:25], torch.tensor(2.0)))
-    assert all(torch.isclose(points[:, 'x'][25:], torch.tensor(0.0)))
+    time = Points(torch.tensor([[1.0], [0.0]]), R1('t'))
+    points = P.sample_random_uniform(n=25, params=time).as_tensor
+    assert points.shape == (50, 1)
+    assert all(torch.isclose(points[:25], torch.tensor(2.0)))
+    assert all(torch.isclose(points[25:], torch.tensor(0.0)))
 
 
 def test_point_random_sampling_with_n_moving_point_higher_dim():
     P = Point(R2('x'), p2)
-    points = P.sample_random_uniform(n=5, t=torch.tensor([[1.0], [0.0]]))
-    assert points[:, 'x'].shape == (10, 2)
-    assert all(torch.isclose(points[:, 'x'][:5, 0], torch.tensor(2.0)))
-    assert all(torch.isclose(points[:, 'x'][5:, 0], torch.tensor(0.0)))
-    assert all(torch.isclose(points[:, 'x'][:, 1], torch.tensor(0.0)))
+    time = Points(torch.tensor([[1.0], [0.0]]), R1('t'))
+    points = P.sample_random_uniform(n=5, params=time).as_tensor
+    assert points.shape == (10, 2)
+    assert all(torch.isclose(points[:5, 0], torch.tensor(2.0)))
+    assert all(torch.isclose(points[5:, 0], torch.tensor(0.0)))
+    assert all(torch.isclose(points[:, 1], torch.tensor(0.0)))
 
 
 def test_point_grid_sampling_with_n():
     P = Point(R1('x'), 4)
-    points = P.sample_grid(n=25)
-    assert points[:, 'x'].shape == (25, 1)
-    assert all(torch.isclose(points[:, 'x'], torch.tensor(4.0)))
+    points = P.sample_grid(n=25).as_tensor
+    assert points.shape == (25, 1)
+    assert all(torch.isclose(points, torch.tensor(4.0)))

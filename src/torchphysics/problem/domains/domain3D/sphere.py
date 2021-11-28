@@ -30,20 +30,19 @@ class Sphere(Domain):
         new_radius = self.radius.partially_evaluate(**data)
         return Sphere(space=self.space, center=new_center, radius=new_radius)
 
-    def _compute_center_and_radius(self, **params):
-        center = self.center(**params).reshape(-1, 3)
-        radius = self.radius(**params)
+    def _compute_center_and_radius(self, params=Points.empty()):
+        center = self.center(params).reshape(-1, 3)
+        radius = self.radius(params)
         return center,radius
 
-    def _contains(self, points, **params):
-        center, radius = self._compute_center_and_radius(**params,
-                                                         **points.coordinates)
-        points = points.as_tensor
+    def _contains(self, points, params=Points.empty()):
+        center, radius = self._compute_center_and_radius(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.le(norm[:, None], radius).reshape(-1, 1)
 
-    def bounding_box(self, **params):
-        center, radius = self._compute_center_and_radius(**params)
+    def bounding_box(self, params=Points.empty()):
+        center, radius = self._compute_center_and_radius(params)
         bounds = []
         for i in range(self.dim):
             i_min = torch.min(center[:, i] - radius)
@@ -52,16 +51,16 @@ class Sphere(Domain):
             bounds.append(i_max.item())
         return bounds
 
-    def _get_volume(self, **params):
-        radius = self.radius(**params)
+    def _get_volume(self, params=Points.empty()):
+        radius = self.radius(params)
         volume = 3.0/4.0 * np.pi * radius**3
         return volume.reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        center, radius = self._compute_center_and_radius(params)
+        num_of_params = self.len_of_params(params)
         # take cubic root to stay uniform
         r = torch.pow(torch.rand((num_of_params, n, 1)), 1/3.0)
         r *= radius
@@ -76,13 +75,13 @@ class Sphere(Domain):
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
+            n = self.compute_n_from_density(d, params)
         if n > 10:
             # for to small n the sampling in the box is not stable,
             # in this case only use random points.
-            center, radius = self._compute_center_and_radius(**params)
+            center, radius = self._compute_center_and_radius(params)
             points = self._point_grid_in_box(n, radius.item())
             points_inside = self._get_points_inside(points, radius.item())
             points_inside += center
@@ -106,8 +105,9 @@ class Sphere(Domain):
     def _append_random(self, points_inside, n, params):
         if len(points_inside) == n:
             return points_inside
-        random_points = self.sample_random_uniform(n=n-len(points_inside), **params)
-        random_points = random_points.as_tensor
+        random_points = self.sample_random_uniform(n=n-len(points_inside),
+                                                   params=params)
+        random_points = random_points[:, list(self.space.variables)].as_tensor
         return torch.cat((points_inside, random_points), dim=0)
 
     @property
@@ -121,23 +121,22 @@ class SphereBoundary(BoundaryDomain):
         assert isinstance(domain, Sphere)
         super().__init__(domain)
 
-    def _contains(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params,
-                                                                **points.coordinates)
-        points = points.as_tensor
+    def _contains(self, points, params=Points.empty()):
+        center, radius = self.domain._compute_center_and_radius(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
-    def _get_volume(self, **params):
-        radius = self.domain.radius(**params)
+    def _get_volume(self, params=Points.empty()):
+        radius = self.domain.radius(params)
         volume = 4 * np.pi * radius**2
         return volume.reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self.domain._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        center, radius = self.domain._compute_center_and_radius(params)
+        num_of_params = self.len_of_params(params)
         phi = 2 * np.pi * torch.rand((num_of_params, n, 1))
         theta = torch.rand((num_of_params, n, 1))
         theta = torch.arccos(2*theta - 1) - np.pi/2.0
@@ -148,10 +147,10 @@ class SphereBoundary(BoundaryDomain):
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self.domain._compute_center_and_radius(**params)
+            n = self.compute_n_from_density(d, params)
+        center, radius = self.domain._compute_center_and_radius(params)
         # From: https://stackoverflow.com/questions/9600801/
         # evenly-distributing-n-points-on-a-sphere
         points = []
@@ -169,9 +168,8 @@ class SphereBoundary(BoundaryDomain):
         points = torch.add(points, center)
         return Points(points, self.space)
 
-    def normal(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**params,
-                                                                **points.coordinates)
-        points = points.as_tensor
+    def normal(self, points, params=Points.empty()):
+        center, radius = self.domain._compute_center_and_radius(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 3)

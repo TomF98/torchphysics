@@ -84,7 +84,7 @@ class Points():
     
     @property
     def isempty(self):
-        return len(self) > 0 and self.space.dim == 0
+        return len(self) == 0 and self.space.dim == 0
 
     def __repr__(self):
         return "{}:\n{}".format(self.__class__.__name__, self.coordinates)

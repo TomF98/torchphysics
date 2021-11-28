@@ -3,10 +3,10 @@ import numpy as np
 import torch
 import os
 
-from torchphysics.problem.spaces.space import R3, R2
+from torchphysics.problem.spaces.space import R3, R2, R1
 from torchphysics.problem.domains.domain3D.trimesh_polyhedron import \
     TrimeshPolyhedron, TrimeshBoundary
-from torchphysics.problem.spaces.points import Point, Points
+from torchphysics.problem.spaces.points import Points
 
 
 def _create_simple_polygon():
@@ -104,7 +104,7 @@ def test_random_sampling_inside_poly3D_with_n():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.sample_random_uniform(n=545)
-    assert points[:, 'x'].shape == (545,3)
+    assert points.as_tensor.shape == (545,3)
     assert all(poly3D._contains(points))   
 
 
@@ -118,8 +118,9 @@ def test_random_sampling_inside_poly3D_with_d():
 def test_random_sampling_inside_poly3D_with_n_and_params():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.sample_random_uniform(n=20, t=torch.tensor([[1.2], [9]]))
-    assert points[:, 'x'].shape == (40,3)
+    time = Points(torch.tensor([[1.2], [9]]), R1('t'))
+    points = poly3D.sample_random_uniform(n=20, params=time)
+    assert points.as_tensor.shape == (40,3)
     assert all(poly3D._contains(points))   
 
 
@@ -127,7 +128,7 @@ def test_grid_sampling_inside_poly3D():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.sample_grid(n=20)
-    assert points[:, 'x'].shape == (20, 3)
+    assert points.as_tensor.shape == (20, 3)
     assert all(torch.logical_or(poly3D._contains(points),
                                 poly3D.boundary._contains(points)))    
 
@@ -143,8 +144,9 @@ def test_grid_sampling_inside_poly3D_with_d():
 def test_grid_sampling_inside_poly3D_with_arbritray_params():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.sample_grid(n=50, t=torch.tensor([[1.0]]))
-    assert points[:, 'x'].shape == (50, 3)
+    time = Points(torch.tensor([[1.0]]), R1('t'))
+    points = poly3D.sample_grid(n=50, params=time)
+    assert points.as_tensor.shape == (50, 3)
     assert all(torch.logical_or(poly3D._contains(points),
                                 poly3D.boundary._contains(points)))   
 
@@ -153,7 +155,7 @@ def test_random_sampling_boundary_poly3D():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.boundary.sample_random_uniform(n=50)
-    assert points[:, 'x'].shape == (50,3)
+    assert points.as_tensor.shape == (50,3)
     assert all(poly3D.boundary._contains(points)) 
 
 
@@ -167,8 +169,9 @@ def test_random_sampling_boundary_poly3D_with_d():
 def test_random_sampling_boundary_poly3D_with_n_and_params():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.boundary.sample_random_uniform(n=50, t=torch.tensor([[1.2], [9]]))
-    assert points[:, 'x'].shape == (100,3)
+    time = Points(torch.tensor([[1.2], [9]]), R1('t'))
+    points = poly3D.boundary.sample_random_uniform(n=50, params=time)
+    assert points.as_tensor.shape == (100,3)
     assert all(poly3D.boundary._contains(points)) 
 
 
@@ -176,7 +179,7 @@ def test_grid_sampling_boundary_poly3D():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
     points = poly3D.boundary.sample_grid(50)
-    assert points[:, 'x'].shape == (50,3)
+    assert points.as_tensor.shape == (50,3)
     assert all(poly3D.boundary._contains(points)) 
 
 

@@ -3,6 +3,7 @@ import torch
 from ..domain import Domain, BoundaryDomain
 from ...spaces import Points
 
+
 class Interval(Domain):
     """Creates a Interval of the form [a, b].
 
@@ -29,42 +30,42 @@ class Interval(Domain):
         return Interval(space=self.space, lower_bound=new_lower_bound, 
                         upper_bound=new_upper_bound)
 
-    def _contains(self, points, **params):
-        lb = self.lower_bound(**points.coordinates, **params)
-        ub = self.upper_bound(**points.coordinates, **params)
-        points = points.as_tensor
+    def _contains(self, points, params=Points.empty()):
+        lb = self.lower_bound(points.join(params))
+        ub = self.upper_bound(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         bigger_then_low = torch.ge(points[:, None], lb) 
         smaller_then_up = torch.le(points[:, None], ub) 
         return torch.logical_and(bigger_then_low, smaller_then_up).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        lb = self.lower_bound(**params)
-        ub = self.upper_bound(**params)
-        points = torch.rand((self.get_num_of_params(**params), n, 1))
+            n = self.compute_n_from_density(d, params)
+        lb = self.lower_bound(params)
+        ub = self.upper_bound(params)
+        points = torch.rand((self.len_of_params(params), n, 1))
         points *= (ub - lb)
         points += lb
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        lb = self.lower_bound(**params)
-        ub = self.upper_bound(**params)
+            n = self.compute_n_from_density(d, params)
+        lb = self.lower_bound(params)
+        ub = self.upper_bound(params)
         points = torch.linspace(0, 1, n+2)[1:-1, None]
         points = (ub - lb) * points 
         points += lb
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def bounding_box(self, **params):
-        lb = self.lower_bound(**params)
-        ub = self.upper_bound(**params)
+    def bounding_box(self, params=Points.empty()):
+        lb = self.lower_bound(params)
+        ub = self.upper_bound(params)
         return [torch.min(lb).item(), torch.max(ub).item()]
 
-    def _get_volume(self, **params):
-        lb = self.lower_bound(**params)
-        ub = self.upper_bound(**params)
+    def _get_volume(self, params=Points.empty()):
+        lb = self.lower_bound(params)
+        ub = self.upper_bound(params)
         return (ub - lb).reshape(-1, 1)
 
     @property
@@ -86,42 +87,42 @@ class IntervalBoundary(BoundaryDomain):
         assert isinstance(domain, Interval)
         super().__init__(domain)
     
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         close_to_left, close_to_right = self._check_close_left_right(points, params) 
         return torch.logical_or(close_to_left, close_to_right).reshape(-1, 1)
 
     def _check_close_left_right(self, points, params):
-        lb = self.domain.lower_bound(**points.coordinates, **params)
-        ub = self.domain.upper_bound(**points.coordinates, **params)
-        points = points.as_tensor
+        lb = self.domain.lower_bound(points.join(params))
+        ub = self.domain.upper_bound(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         close_to_left = torch.isclose(points[:, None], lb)
         close_to_right = torch.isclose(points[:, None], ub)
         return close_to_left, close_to_right
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        lb = self.domain.lower_bound(**params)
-        ub = self.domain.upper_bound(**params)
-        random_boundary_index = torch.rand((self.get_num_of_params(**params), n, 1)) < 0.5 
+            n = self.compute_n_from_density(d, params)
+        lb = self.domain.lower_bound(params)
+        ub = self.domain.upper_bound(params)
+        random_boundary_index = torch.rand((self.len_of_params(params), n, 1)) < 0.5 
         points = torch.where(random_boundary_index, lb, ub)
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        lb = self.domain.lower_bound(**params)
-        ub = self.domain.upper_bound(**params)
+            n = self.compute_n_from_density(d, params)
+        lb = self.domain.lower_bound(params)
+        ub = self.domain.upper_bound(params)
         b_index = torch.tensor([0, 1], dtype=bool).repeat(int(n/2.0) + 1)
         points = torch.where(b_index[:n], lb, ub)
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def normal(self, points, **params):
+    def normal(self, points, params=Points.empty()):
         close_to_left, _ = self._check_close_left_right(points, params)
         return torch.where(close_to_left, -1, 1).reshape(-1, 1)
 
-    def _get_volume(self, **params):
-        no_of_params = self.get_num_of_params(**params)
+    def _get_volume(self, params=Points.empty()):
+        no_of_params = self.len_of_params(params)
         return 2 * torch.ones((no_of_params, 1))
 
 
@@ -138,27 +139,27 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
         return IntervalSingleBoundaryPoint(evaluate_domain, side=self.side,
                                            normal_vec=self.normal_vec)
 
-    def _contains(self, points, **params):
-        side = self.side(**points.coordinates, **params)
-        points = points.as_tensor
+    def _contains(self, points, params=Points.empty()):
+        side = self.side(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         inside = torch.isclose(points[:, None], side)
         return inside.reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        side = self.side(**params)
-        points = torch.ones((self.get_num_of_params(**params), n, 1))
+            n = self.compute_n_from_density(d, params)
+        side = self.side(params)
+        points = torch.ones((self.len_of_params(params), n, 1))
         points *= side
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
-        return self.sample_random_uniform(n=n, d=d, **params)
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
+        return self.sample_random_uniform(n=n, d=d, params=params)
 
-    def normal(self, points, **params):
-        points = torch.ones((self.get_num_of_params(**points, **params), 1))
+    def normal(self, points, params=Points.empty()):
+        points = torch.ones((self.len_of_params(points.join(params)), 1))
         return points * self.normal_vec
 
-    def _get_volume(self, **params):
-        no_of_params = self.get_num_of_params(**params)
+    def _get_volume(self, params=Points.empty()):
+        no_of_params = self.len_of_params(params)
         return 1 * torch.ones((no_of_params, 1))

@@ -2,6 +2,7 @@ import abc
 import torch
 
 from ...utils.user_fun import UserFunction
+from ..spaces.points import Points
 
 
 class Domain:
@@ -42,12 +43,12 @@ class Domain:
         self._user_volume = UserFunction(volume)
 
     @abc.abstractmethod
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         raise NotImplementedError
 
-    def volume(self, **params):
+    def volume(self, params=Points.empty()):
         if self._user_volume is None:
-            return self._get_volume(**params)
+            return self._get_volume(params)
         else:
             return self._user_volume()
 
@@ -122,11 +123,11 @@ class Domain:
         return self._contains(points)
 
     @abc.abstractmethod
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def bounding_box(self, **params):
+    def bounding_box(self, params=Points.empty()):
         """Computes the bounds of the domain.
 
         Returns
@@ -140,7 +141,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         """Greates a equdistant grid in the domain.
 
         Parameters
@@ -159,7 +160,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         """Greates a random uniform points in the domain.
 
         Parameters
@@ -180,15 +181,15 @@ class Domain:
     def __call__(self, **data):
         raise NotImplementedError
 
-    def get_num_of_params(self, **params):
+    def len_of_params(self, params):
         # finds the number of params, for which points should be sampled
         num_of_params = 1
         if len(params) > 0:
-            num_of_params = len(list(params.values())[0])
+            num_of_params = len(params)
         return num_of_params
 
-    def compute_n_from_density(self, d, **params):
-        volume = self.volume(**params)
+    def compute_n_from_density(self, d, params):
+        volume = self.volume(params)
         if len(volume) > 1:
             raise ValueError(f"""Sampling with a density is only possible for one
                                 given pair of parameters. Found {len(volume)} 
@@ -220,11 +221,11 @@ class BoundaryDomain(Domain):
         evaluated_domain = self.domain(**data)
         return evaluated_domain.boundary
 
-    def bounding_box(self, **params):
-        return self.domain.bounding_box(**params)
+    def bounding_box(self, params=Points.empty()):
+        return self.domain.bounding_box(params)
 
     @abc.abstractmethod
-    def normal(self, points, **params):
+    def normal(self, points, params=Points.empty()):
         """Computes the normal vector at each point in points.
 
         Parameters

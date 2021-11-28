@@ -30,15 +30,14 @@ class Circle(Domain):
         new_radius = self.radius.partially_evaluate(**data)
         return Circle(space=self.space, center=new_center, radius=new_radius)
 
-    def _contains(self, points, **params):
-        center, radius = self._compute_center_and_radius(**points.coordinates,
-                                                         **params)
-        points = points.as_tensor
+    def _contains(self, points, params=Points.empty()):
+        center, radius = self._compute_center_and_radius(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.le(norm[:, None], radius).reshape(-1, 1)
 
-    def bounding_box(self, **params):
-        center, radius = self._compute_center_and_radius(**params)
+    def bounding_box(self, params=Points.empty()):
+        center, radius = self._compute_center_and_radius(params)
         bounds = []
         for i in range(self.dim):
             i_min = torch.min(center[:, i] - radius)
@@ -47,11 +46,11 @@ class Circle(Domain):
             bounds.append(i_max.item())
         return bounds
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        center, radius = self._compute_center_and_radius(params)
+        num_of_params = self.len_of_params(params)
         r = torch.sqrt(torch.rand((num_of_params, n, 1)))
         r *= radius
         phi = 2 * np.pi * torch.rand((num_of_params, n, 1))
@@ -61,20 +60,20 @@ class Circle(Domain):
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        center, radius = self._compute_center_and_radius(params)
+        num_of_params = self.len_of_params(params)
         grid = self._equidistant_points_in_circle(n)
         grid = grid.repeat(num_of_params, 1).view(num_of_params, n, 2) 
         points = torch.multiply(radius, grid)
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def _compute_center_and_radius(self, **params):
-        center = self.center(**params).reshape(-1, 2)
-        radius = self.radius(**params)
+    def _compute_center_and_radius(self, params=Points.empty()):
+        center = self.center(params).reshape(-1, 2)
+        radius = self.radius(params)
         return center,radius
 
     def _equidistant_points_in_circle(self, n):
@@ -88,8 +87,8 @@ class Circle(Domain):
                                      torch.multiply(radius, torch.sin(phi))))
         return points                             
 
-    def _get_volume(self, **params):
-        radius = self.radius(**params)
+    def _get_volume(self, params=Points.empty()):
+        radius = self.radius(params)
         volume = np.pi * radius**2
         return volume.reshape(-1, 1)
 
@@ -104,29 +103,28 @@ class CircleBoundary(BoundaryDomain):
         assert isinstance(domain, Circle)
         super().__init__(domain)
 
-    def _contains(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**points.coordinates,
-                                                                **params)
-        points = points.as_tensor
+    def _contains(self, points, params=Points.empty()):
+        center, radius = self.domain._compute_center_and_radius(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         norm = torch.linalg.norm(points - center, dim=1).reshape(-1, 1)
         return torch.isclose(norm[:, None], radius).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self.domain._compute_center_and_radius(**params)
-        phi = 2 * np.pi * torch.rand((self.get_num_of_params(**params), n, 1))
+            n = self.compute_n_from_density(d, params)
+        center, radius = self.domain._compute_center_and_radius(params)
+        phi = 2 * np.pi * torch.rand((self.len_of_params(params), n, 1))
         points = torch.cat((torch.multiply(radius, torch.cos(phi)),
                             torch.multiply(radius, torch.sin(phi))), 
                             dim=2)
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        center, radius = self.domain._compute_center_and_radius(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        center, radius = self.domain._compute_center_and_radius(params)
+        num_of_params = self.len_of_params(params)
         grid = torch.linspace(0, 2*np.pi, n+1)[:-1] # last one would be double
         phi = grid.repeat(num_of_params).view(num_of_params, n, 1) 
         points = torch.cat((torch.multiply(radius, torch.cos(phi)),
@@ -135,14 +133,13 @@ class CircleBoundary(BoundaryDomain):
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def normal(self, points, **params):
-        center, radius = self.domain._compute_center_and_radius(**points.coordinates,
-                                                                **params)
-        points = points.as_tensor
+    def normal(self, points, params=Points.empty()):
+        center, radius = self.domain._compute_center_and_radius(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 2)
 
-    def _get_volume(self, **params):
-        radius = self.domain.radius(**params)
+    def _get_volume(self, params=Points.empty()):
+        radius = self.domain.radius(params)
         volume = 2 * np.pi * radius
         return volume.reshape(-1, 1)

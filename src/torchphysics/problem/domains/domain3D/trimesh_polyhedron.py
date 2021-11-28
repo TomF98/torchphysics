@@ -139,15 +139,15 @@ class TrimeshPolyhedron(Domain):
     def __call__(self, **data):
         return self
 
-    def bounding_box(self, **params):
+    def bounding_box(self, params=Points.empty()):
         bound_corners = self.mesh.bounds
         return bound_corners.T.flatten()
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         volume = self.mesh.volume
         return torch.tensor(volume).reshape(-1, 1)
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         if isinstance(points, Points):
             points = points.as_tensor
         inside = self.mesh.contains(points).reshape(-1,1)
@@ -155,12 +155,12 @@ class TrimeshPolyhedron(Domain):
 
     def _compute_number_of_points(self, n, d, params):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        num_of_params = self.len_of_params(params)
         n *= num_of_params
         return n
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         n = self._compute_number_of_points(n, d, params)
         points = torch.empty((0, self.dim))
         computed_points = 0
@@ -170,9 +170,9 @@ class TrimeshPolyhedron(Domain):
             computed_points += len(new_points)
         return Points(points, self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         n = self._compute_number_of_points(n, d, params)
-        bounds = self.bounding_box(**params)
+        bounds = self.bounding_box(params)
         points = self._point_grid_in_bounding_box(n, bounds)
         points_inside = self._get_points_inside(points)
         final_points = Sphere._append_random(self, points_inside, n, params)
@@ -210,31 +210,31 @@ class TrimeshBoundary(BoundaryDomain):
         assert isinstance(domain, TrimeshPolyhedron)
         super().__init__(domain)
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         points = points.as_tensor
         distance = trimesh.proximity.signed_distance(self.domain.mesh, points)
         abs_dist = torch.absolute(torch.tensor(distance))
         on_bound = (abs_dist <= self.domain.tol)
         return on_bound.reshape(-1,1)
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         area = sum(self.domain.mesh.area_faces)
         return torch.tensor(area).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         n = self.domain._compute_number_of_points(n, d, params)
         points = trimesh.sample.sample_surface(self.domain.mesh, n)[0]
         tensor_points = torch.tensor(points)
         return Points(tensor_points, self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         n = self.domain._compute_number_of_points(n, d, params)
         points = trimesh.sample.sample_surface_even(self.domain.mesh, n)[0]
         points = torch.tensor(points)
         points = Sphere._append_random(self, points, n, params)
         return Points(points, self.space)
 
-    def normal(self, points, **params):
+    def normal(self, points, params=Points.empty()):
         points = points.as_tensor
         index = self.domain.mesh.nearest.on_surface(points)[2]
         mesh_normals = torch.tensor(self.domain.mesh.face_normals)
