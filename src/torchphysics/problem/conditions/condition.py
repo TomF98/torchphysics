@@ -6,6 +6,7 @@ import abc
 import torch
 import numpy as np
 
+from ...models import Parameter
 from ...utils import UserFunction
 
 """
@@ -110,9 +111,11 @@ class PINNCondition(Condition):
         solving forward and inverse problems involving nonlinear partial differential
         equations", Journal of Computational Physics, vol. 378, pp. 686-707, 2019.
     """
-    def __init__(self, module, sampler, residual_fn, norm, name='pinncondition', weight=1.0):
+    def __init__(self, module, sampler, residual_fn, norm, parameter=Parameter.empty(),
+                 name='pinncondition', weight=1.0):
         super().__init__(name=name, weight=weight, track_gradients=True)
         self.module = module
+        self.parameter = parameter
         self.sampler = sampler
         self.residual_fn = UserFunction(residual_fn)
         self.norm = norm
@@ -120,7 +123,9 @@ class PINNCondition(Condition):
     def forward(self):
         x = next(self.sampler)
         y = self.module(x)  # y is in coords of output space
-        return self.norm(self.residual_fn(**y.coordinates, **x.coordinates))
+        return self.norm(self.residual_fn(**y.coordinates,
+                                          **x.coordinates,
+                                          **self.parameter.coordinates))
 
 """
 Old conditions:

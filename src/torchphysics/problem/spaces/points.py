@@ -20,6 +20,19 @@ class Points():
         Creates an empty Points object.
         """
         return cls(torch.empty(0,0, **kwargs), Space({}))
+    
+    @classmethod
+    def joined(cls, *points_l):
+        points_out = []
+        space_out = Space({})
+        for points in points_l:
+            if points.isempty:
+                continue
+            assert points_out.space.keys().isdisjoint(points.space)
+            points_out.append(points)
+            space_out = space_out * points.space
+        return cls(torch.cat(points_out, dim=0), space_out)
+
 
     @classmethod
     def from_coordinates(cls, coords):
@@ -192,6 +205,5 @@ class Points():
         args_list = [a._t if hasattr(a, '_t') else a for a in args]
         spaces = tuple(a.space for a in args if hasattr(a, 'space'))
         assert len(spaces) > 0
-        assert all(space == spaces[0] for space in spaces)
         ret = func(*args_list, **kwargs)
-        return Points(ret, spaces[0])
+        return ret

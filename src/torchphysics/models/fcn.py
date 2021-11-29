@@ -1,8 +1,21 @@
 import torch
 import torch.nn as nn
 
-from .diffeqmodel import DiffEqModel
+from .model import Model
 
+
+class FCN(Model):
+    """
+    A simple fully connected neural network.
+
+    """
+    def __init__(self, input_space, output_space, hidden_n, activations):
+        super().__init__(input_space, output_space)
+        
+
+"""
+Old models:
+"""
 
 class BlockFCN(DiffEqModel):
     """A fully connected neural network with constant width.

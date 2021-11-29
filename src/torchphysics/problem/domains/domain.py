@@ -199,7 +199,7 @@ class Domain:
         return int(n)
 
     def _repeat_params(self, n, params):
-        repeated_params = torch.repeat_interleave(params, n, dim=0)
+        repeated_params = Points(torch.repeat_interleave(params, n, dim=0), params.space)
         return 1 if len(repeated_params) else n, repeated_params
 
 
