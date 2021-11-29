@@ -115,7 +115,7 @@ def test_sphere_random_sampling_with_n_and_variable_radius():
     time = Points(torch.tensor([0, 1]).reshape(-1, 1), R1('t'))
     points = C.sample_random_uniform(n=4, params=time)
     assert points.as_tensor.shape == (8, 3)
-    assert all(C._contains(points, torch.repeat_interleave(time, 4, dim=0)))
+    assert all(C._contains(points, Points(torch.repeat_interleave(time, 4, dim=0), R1('t'))))
 
 
 def test_sphere_random_sampling_with_n_and_variable_radius_and_center():
@@ -123,7 +123,7 @@ def test_sphere_random_sampling_with_n_and_variable_radius_and_center():
     time = Points(torch.tensor([0, 1]).reshape(-1, 1), R1('t'))
     points = C.sample_random_uniform(n=10, params=time)
     assert points.as_tensor.shape == (20, 3)
-    assert all(C._contains(points, torch.repeat_interleave(time, 10, dim=0)))
+    assert all(C._contains(points, Points(torch.repeat_interleave(time, 10, dim=0), R1('t'))))
 
 
 def test_sphere_grid_sampling_with_n():
@@ -152,7 +152,7 @@ def test_sphere_grid_sampling_with_n_and_variable_radius_and_center():
     time = Points(torch.tensor([0.0]).reshape(-1, 1), R1('t'))
     points = C.sample_grid(n=50, params=time)
     assert points.as_tensor.shape == (50, 3)
-    assert all(C._contains(points, torch.repeat_interleave(time, 50, dim=0)))
+    assert all(C._contains(points, Points(torch.repeat_interleave(time, 50, dim=0), R1('t'))))
 
 
 def test_sphere_grid_sampling_with_d():
@@ -217,7 +217,7 @@ def test_sphere_boundary_random_sampling_with_n_and_variable_domain():
     time = Points(torch.tensor([0.0, 1.0]).reshape(-1, 1), R1('t'))
     points = C.sample_random_uniform(n=4, params=time)
     assert points.as_tensor.shape == (8, 3)
-    assert all(C._contains(points, torch.repeat_interleave(time, 4, dim=0)))
+    assert all(C._contains(points, Points(torch.repeat_interleave(time, 4, dim=0), R1('t'))))
 
 
 def test_sphere_boundary_grid_sampling_with_n():
@@ -238,7 +238,7 @@ def test_sphere_boundary_grid_sampling_with_n_and_variable_domain():
     time = Points(torch.tensor([0.0]).reshape(-1, 1), R1('t'))
     points = C.sample_grid(n=20, params=time)
     assert points.as_tensor.shape == (20, 3)
-    assert all(C._contains(points, torch.repeat_interleave(time, 20, dim=0)))
+    assert all(C._contains(points, Points(torch.repeat_interleave(time, 20, dim=0), R1('t'))))
 
 
 def test_sphere_normals():
