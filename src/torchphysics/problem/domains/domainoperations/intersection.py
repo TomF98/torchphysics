@@ -6,7 +6,15 @@ from ...spaces import Points
 
 
 class IntersectionDomain(Domain):
+    """Implements the logical intersection of two domains.
 
+    Parameters
+    ----------
+    domain_a : Domain
+        The first domain.
+    domain_b : Domain
+        The second domain. 
+    """
     def __init__(self, domain_a: Domain, domain_b: Domain):
         assert domain_a.space == domain_b.space
         self.domain_a = domain_a
@@ -20,57 +28,52 @@ class IntersectionDomain(Domain):
         domain_b = self.domain_b(**data)
         return IntersectionDomain(domain_a, domain_b)
 
-    def _contains(self, points, **params):
-        in_a = self.domain_a._contains(points, **params)
-        in_b = self.domain_b._contains(points, **params)
+    def _contains(self, points, params=Points.empty()):
+        in_a = self.domain_a._contains(points, params)
+        in_b = self.domain_b._contains(points, params)
         return torch.logical_and(in_a, in_b)
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         warnings.warn("""Exact volume of this intersection is not known,
                          will use the estimate: volume = domain_a.volume.
-                         If you need exact volume or sampling, use domain.set_volume().""")
-        return self.domain_a.volume(**params)
+                         If you need the exact volume for sampling,
+                         use domain.set_volume()""")
+        return self.domain_a.volume(params)
 
-    def bounding_box(self, **params):
-        bounds_a = self.domain_a.bounding_box(**params)
-        bounds_b = self.domain_b.bounding_box(**params)
+    def bounding_box(self, params=Points.empty()):
+        bounds_a = self.domain_a.bounding_box(params)
+        bounds_b = self.domain_b.bounding_box(params)
         bounds = []
         for i in range(self.space.dim):
             bounds.append(max([bounds_a[2*i], bounds_b[2*i]]))
             bounds.append(min([bounds_a[2*i+1], bounds_b[2*i+1]]))
         return bounds
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_random_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_random_with_d(d, params)
 
-    def _sample_random_with_d(self, d, **params):
-        points_a = self.domain_a.sample_random_uniform(d=d, **params)
-        points = self._cut_points(points_a, **params)
-        return points
+    def _sample_random_with_d(self, d, params=Points.empty()):
+        points_a = self.domain_a.sample_random_uniform(d=d, params=params)
+        return self._cut_points(points_a, params)
 
-    def _cut_points(self, points, **params):
+    def _cut_points(self, points, params=Points.empty()):
         # check which points are in domain b
-        n = self.get_num_of_params(**points)
-        _, repeated_params = self._repeat_params(n, **params)
-        in_b = self.domain_b._contains(points=points, **repeated_params)    
+        n = len(params)
+        _, repeated_params = self._repeat_params(n, params)
+        in_b = self.domain_b._contains(points=points, params=repeated_params)    
         index = torch.where(in_b)[0]
-        return self.space.as_tensor(points)[index]
+        return points[index, ]
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_grid_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_grid_with_d(d, params)
 
-    def _sample_grid_with_d(self, d, **params):
-        points_a = self.domain_a.sample_grid(d=d, **params)
-        points = self._cut_points(points_a, **params)
-        return points
+    def _sample_grid_with_d(self, d, params=Points.empty()):
+        points_a = self.domain_a.sample_grid(d=d, params=params)
+        return  self._cut_points(points_a, params)
 
     @property
     def boundary(self):
@@ -84,60 +87,61 @@ class IntersectionBoundaryDomain(BoundaryDomain):
         assert not isinstance(domain.domain_b, BoundaryDomain)
         super().__init__(domain)
 
-    def _contains(self, points, **params):
-        in_a = self.domain.domain_a._contains(points, **params)
-        in_b = self.domain.domain_b._contains(points, **params)
-        on_a_bound = self.domain.domain_a.boundary._contains(points, **params)
-        on_b_bound = self.domain.domain_b.boundary._contains(points, **params)
+    def _contains(self, points, params=Points.empty()):
+        in_a = self.domain.domain_a._contains(points, params)
+        in_b = self.domain.domain_b._contains(points, params)
+        on_a_bound = self.domain.domain_a.boundary._contains(points, params)
+        on_b_bound = self.domain.domain_b.boundary._contains(points, params)
         on_a_part = torch.logical_and(on_a_bound, in_b)
         on_b_part = torch.logical_and(on_b_bound, in_a)
         return torch.logical_or(on_a_part, on_b_part)
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         warnings.warn("""Exact volume of this intersection-boundary is not known,
-                         will use the estimate: volume = domain_a.volume.
-                         If you need exact volume or sampling, use domain.set_volume().""")
-        return self.domain.domain_a.volume(**params)
+                         will use the estimate: volume = boundary_a + bounadry_b.
+                         If you need the exact volume for sampling,
+                         use domain.set_volume()""")
+        volume_a = self.domain.domain_a.boundary.volume(params)
+        volume_b = self.domain.domain_b.boundary.volume(params)
+        return volume_a + volume_b
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_random_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_random_with_d(d, params)
 
-    def _sample_random_with_d(self, d, **params):
-        points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d, **params)
-        points_a = self._delete_outer_points(points_a, self.domain.domain_b, **params) 
-        points_b = self.domain.domain_b.boundary.sample_random_uniform(d=d, **params)  
-        points_b = self._delete_outer_points(points_b, self.domain.domain_a, **params)     
-        return torch.cat((points_a, points_b), dim=0)     
 
-    def _delete_outer_points(self, points, domain, **params):
-        n = self.get_num_of_params(**points)
-        _, repeated_params = self._repeat_params(n, **params)
-        inside = domain._contains(points, **repeated_params)
-        points = self.space.as_tensor(points)
+    def _sample_random_with_d(self, d, params=Points.empty()):
+        points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d,
+                                                                       params=params)
+        points_a = self._delete_outer_points(points_a, self.domain.domain_b, params) 
+        points_b = self.domain.domain_b.boundary.sample_random_uniform(d=d,
+                                                                       params=params)  
+        points_b = self._delete_outer_points(points_b, self.domain.domain_a, params)     
+        return points_a | points_b 
+
+    def _delete_outer_points(self, points, domain, params):
+        n = len(points)
+        _, repeated_params = self._repeat_params(n, params)
+        inside = domain._contains(points, repeated_params)
         index = torch.where(inside)[0]
-        return points[index]
+        return points[index, ]
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_grid_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_grid_with_d(d, params)
 
-    def _sample_grid_with_d(self, d, **params):
-        points_a = self.domain.domain_a.boundary.sample_grid(d=d, **params)
-        points_a = self._delete_outer_points(points_a, self.domain.domain_b, **params) 
-        points_b = self.domain.domain_b.boundary.sample_grid(d=d, **params)  
-        points_b = self._delete_outer_points(points_b, self.domain.domain_a, **params)     
-        return torch.cat((points_a, points_b), dim=0)     
+    def _sample_grid_with_d(self, d, params=Points.empty()):
+        points_a = self.domain.domain_a.boundary.sample_grid(d=d, params=params)
+        points_a = self._delete_outer_points(points_a, self.domain.domain_b, params) 
+        points_b = self.domain.domain_b.boundary.sample_grid(d=d, params=params)  
+        points_b = self._delete_outer_points(points_b, self.domain.domain_a, params)     
+        return points_a | points_b    
 
-    def normal(self, points, **params):
-        a_normals = self.domain.domain_a.boundary.normal(points, **params)
-        b_normals = self.domain.domain_b.boundary.normal(points, **params)
-        on_a = self.domain.domain_a.boundary._contains(points, **params)
+    def normal(self, points, params=Points.empty()):
+        a_normals = self.domain.domain_a.boundary.normal(points, params)
+        b_normals = self.domain.domain_b.boundary.normal(points, params)
+        on_a = self.domain.domain_a.boundary._contains(points, params)
         normals = torch.where(on_a, a_normals, b_normals)
         return normals
