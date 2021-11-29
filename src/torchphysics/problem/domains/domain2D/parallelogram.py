@@ -45,22 +45,22 @@ class Parallelogram(Domain):
                 return domain_param[0, :]
         return domain_param
 
-    def _get_volume(self, **params):
-        _, _, _, dir_1, dir_2 = self._construct_parallelogram(**params)
+    def _get_volume(self, params=Points.empty()):
+        _, _, _, dir_1, dir_2 = self._construct_parallelogram(params)
         # volume equals the determinate of the matrix [dir_1, dir_2]
         volume = dir_1[:, :1] * dir_2[:, 1:] - dir_1[:, 1:] * dir_2[:, :1]
         return volume
 
-    def _construct_parallelogram(self, **params):
-        origin = self.origin(**params).reshape(-1, 2)
-        corner_1 = self.corner_1(**params).reshape(-1, 2)
-        corner_2 = self.corner_2(**params).reshape(-1, 2)
+    def _construct_parallelogram(self, params=Points.empty()):
+        origin = self.origin(params).reshape(-1, 2)
+        corner_1 = self.corner_1(params).reshape(-1, 2)
+        corner_2 = self.corner_2(params).reshape(-1, 2)
         dir_1 = corner_1 - origin
         dir_2 = corner_2 - origin
         return origin, corner_1, corner_2, dir_1, dir_2
 
-    def bounding_box(self, **params):
-        origin, corner_1, corner_2, _, _ = self._construct_parallelogram(**params)
+    def bounding_box(self, params=Points.empty()):
+        origin, corner_1, corner_2, _, _ = self._construct_parallelogram(params)
         corner_3 = corner_1 + corner_2 - origin
         bounds = []
         for i in range(self.dim):
@@ -72,10 +72,10 @@ class Parallelogram(Domain):
             bounds.append(max(dim_i_max))
         return bounds
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         origin, _, _, dir_1, dir_2 = \
-            self._construct_parallelogram(**points.coordinates, **params)
-        points = points.as_tensor
+            self._construct_parallelogram(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         points -= origin
         bary_x, bary_y = self._solve_lgs(points, dir_1, dir_2)
         in_x = torch.logical_and(0 <= bary_x, bary_x <= 1)
@@ -93,11 +93,11 @@ class Parallelogram(Domain):
         bary_y = torch.divide(y_dir, det)
         return bary_x, bary_y
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(**params)
-        num_of_params = self.get_num_of_params(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(params)
+        num_of_params = self.len_of_params(params)
         bary_coords = torch.rand((num_of_params, n, 2))
         points_in_dir_1 = bary_coords[:, :, :1] * dir_1[:, None]
         points_in_dir_2 = bary_coords[:, :, 1:] * dir_2[:, None]
@@ -105,10 +105,10 @@ class Parallelogram(Domain):
         points += origin[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(params)
         bary_coords = self._compute_barycentric_grid(n, dir_1, dir_2)
         if not d: 
             # if the number of points is specified we have to be sure to sample
@@ -149,10 +149,10 @@ class ParallelogramBoundary(BoundaryDomain):
         assert isinstance(domain, Parallelogram)
         super().__init__(domain)
 
-    def _contains(self, points, **params):
+    def _contains(self, points, params=Points.empty()):
         origin, _, _, dir_1, dir_2 = \
-            self.domain._construct_parallelogram(**points.coordinates, **params)
-        points = points.as_tensor
+            self.domain._construct_parallelogram(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         points -= origin
         bary_x, bary_y = self.domain._solve_lgs(points, dir_1, dir_2)
         x_close = self._bary_coords_close_to_0_or_1(bary_x, bary_y)
@@ -165,18 +165,18 @@ class ParallelogramBoundary(BoundaryDomain):
         close_to_1 = torch.isclose(bary_coord1, torch.tensor(1.0))
         return torch.logical_and(torch.logical_or(close_to_1, close_to_0), between_0_1)
 
-    def _get_volume(self, **params):
-        _, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
+    def _get_volume(self, params=Points.empty()):
+        _, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params)
         side_length1 = torch.linalg.norm(dir_1, dim=1)
         side_length2 = torch.linalg.norm(dir_2, dim=1)
         return 2 * (side_length1 + side_length2).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params)
         side_1, side_2, total_length = self._compute_side_length(dir_1, dir_2)
-        num_of_params = self.get_num_of_params(**params)
+        num_of_params = self.len_of_params(params)
         points = torch.zeros((num_of_params, n, 2))
         bound_location = torch.rand((num_of_params, n, 1)) * total_length
         self._transform_interval_to_boundary(dir_1, dir_2, side_1, side_2, points, 
@@ -197,12 +197,12 @@ class ParallelogramBoundary(BoundaryDomain):
         points += scale * dir[:, None]
         bound_location -= side_length
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if d:
-            n = self.compute_n_from_density(d, **params)
-        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(**params)
+            n = self.compute_n_from_density(d, params)
+        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params)
         side_1, side_2, total_length = self._compute_side_length(dir_1, dir_2)
-        num_of_params = self.get_num_of_params(**params)
+        num_of_params = self.len_of_params(params)
         points = torch.zeros((num_of_params, n, 2))
         bound_grid = torch.linspace(0, 1, n+1)[:-1] # last point would be double
         bound_grid = bound_grid.repeat(num_of_params).view(num_of_params, n, 1) 
@@ -225,10 +225,10 @@ class ParallelogramBoundary(BoundaryDomain):
         self._scale_points_on_side(-dir_1, side_1, points, bound_location)
         self._scale_points_on_side(-dir_2, side_2, points, bound_location)
 
-    def normal(self, points, **params):
+    def normal(self, points, params=Points.empty()):
         origin, _, _, dir_1, dir_2 = \
-            self.domain._construct_parallelogram(**points.coordinates, **params)
-        points = points.as_tensor
+            self.domain._construct_parallelogram(points.join(params))
+        points = points[:, list(self.space.variables)].as_tensor
         normals = torch.zeros_like(points)
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, dir_2)
         normal_dir_1 = self._get_normal_direction(dir_1)

@@ -13,7 +13,7 @@ class RandomUniformSampler(PointSampler):
 
     Parameters
     ----------
-    domain : Domain
+    domain : torchphysics.domain.Domain
         The domain in which the points should be sampled.
     n_points : int, optional
         The number of points that should be sampled.
@@ -30,50 +30,52 @@ class RandomUniformSampler(PointSampler):
         super().__init__(n_points=n_points, density=density, filter=filter)
         self.domain = domain
 
-    def _sample_points(self, **params):
+    def _sample_points(self, params=Points.empty()):
         if self.n_points:
-            rand_points = self.domain.sample_random_uniform(self.n_points, **params)
-            repeated_params = self._repeat_input_params(self.n_points, **params)
-            return {**rand_points, **repeated_params}
+            rand_points = self.domain.sample_random_uniform(self.n_points,
+                                                            params=params)
+            repeated_params = torch.repeat_interleave(params, len(self), dim=0)
+            return rand_points.join(repeated_params)
         else: # density is used
             sample_function = self.domain.sample_random_uniform
-            if any(var in self.domain.necessary_variables for var in params.keys()):
-                return self._sample_params_dependent(sample_function, **params)
-            return self._sample_params_independent(sample_function, **params)
+            if any(var in self.domain.necessary_variables for \
+                    var in params.space.keys()):
+                return self._sample_params_dependent(sample_function, params)
+            return self._sample_params_independent(sample_function, params)
 
-    def _sample_points_with_filter(self, **params):
+    def _sample_points_with_filter(self, params=Points.empty()):
         if self.n_points:
-            point_dict = self._sample_n_points_with_filter(**params)
+            sample_points = self._sample_n_points_with_filter(params)
         else:
             # for density sampling, just sample normally and afterwards remove all 
             # points that are not allowed
-            point_dict = self._sample_points(**params)
-            _ = self._apply_filter(point_dict)
-        return point_dict
+            sample_points = self._sample_points(params)
+            sample_points = self._apply_filter(sample_points)
+        return sample_points
 
-    def _sample_n_points_with_filter(self, **params):
+    def _sample_n_points_with_filter(self, params):
         sample_function = self.domain.sample_random_uniform
-        num_of_params = self._extract_tensor_len_from_dict(params)
-        point_dict = None
+        num_of_params = max(1, len(params))
+        sample_points = None
         for i in range(num_of_params):
-            new_points_dict = {}
+            new_sample_points = None
             num_of_new_points = 0
             iterations = 0
-            # we have to make sure to sample for each params exactly n points
+            # we have to make sure to sample for each param exactly n points
             while num_of_new_points < self.n_points:
                 # sample points
-                new_points, repeated_params = \
-                    self._sample_for_ith_param(sample_function, params, i)
-                new_points.update(repeated_params)
+                new_points = self._sample_for_ith_param(sample_function, params, i)
                 # apply filter and save valid points
-                num_of_new_points += self._apply_filter(new_points)
-                new_points_dict = self._set_point_dict(new_points_dict, new_points)
+                new_points = self._apply_filter(new_points)
+                num_of_new_points += len(new_points)
+                new_sample_points = self._set_sampled_points(new_sample_points,
+                                                             new_points)
                 iterations += 1
                 self._check_iteration_number(iterations, num_of_new_points)
             # if to many points were sampled, delete them.
-            self._cut_tensor_to_length_n(new_points_dict)
-            point_dict = self._set_point_dict(point_dict, new_points_dict)
-        return point_dict 
+            cuted_points = self._cut_tensor_to_length_n(new_sample_points)
+            sample_points = self._set_sampled_points(sample_points, cuted_points)
+        return sample_points 
 
 
 class GaussianSampler(PointSampler):
@@ -82,7 +84,7 @@ class GaussianSampler(PointSampler):
 
     Parameters
     ----------
-    domain : Domain
+    domain : torchphysics.domain.Domain
         The domain in which the points should be sampled.
     n_points : int
         The number of points that should be sampled. 
@@ -109,32 +111,32 @@ class GaussianSampler(PointSampler):
         assert len(self.mean) == self.domain.dim, \
             f"""Dimension of mean: {self.mean}, does not fit the domain.""" 
 
-    def _sample_points(self, **params):
-        num_of_params = self._extract_tensor_len_from_dict(params)
-        point_dict = None
+    def _sample_points(self, params=Points.empty()):
+        num_of_params = max(1, len(params))
+        sample_points = None
         torch_dis = torch.distributions.normal.Normal(loc=self.mean, scale=self.std)
         for i in range(num_of_params):
             current_num_of_points = 0
-            new_points_dict = {}
+            new_sample_points = None
+            ith_params = params[i, ]
+            repeat_params = torch.repeat_interleave(ith_params, len(self), dim=0)
             while current_num_of_points < self.n_points:
                 new_points = torch_dis.sample((self.n_points,))
                 new_points = Points(new_points, self.domain.space)
-                ith_params = self._extract_points_from_dict(i, params)
-                repeat_params = self._repeat_input_params(self.n_points, **ith_params)
-                new_points.update(repeat_params)
-                current_num_of_points += self._check_inside_domain(new_points)
-                new_points_dict = self._set_point_dict(new_points_dict, new_points)
+                new_points = new_points.join(repeat_params)
+                new_points = self._check_inside_domain(new_points)
+                current_num_of_points += len(new_points)
+                new_sample_points = self._set_sampled_points(new_sample_points,
+                                                             new_points)
             # if to many points were sampled, delete them.
-            self._cut_tensor_to_length_n(new_points_dict)
-            point_dict = self._set_point_dict(point_dict, new_points_dict)
-        return point_dict
+            cuted_points = self._cut_tensor_to_length_n(new_sample_points)
+            sample_points = self._set_sampled_points(sample_points, cuted_points)
+        return sample_points
 
     def _check_inside_domain(self, new_points):
         inside = self.domain._contains(new_points)
         index = torch.where(inside)[0]
-        for key, data in new_points.items():
-            new_points[key] = data[index]
-        return len(index)
+        return new_points[index, ]
 
 
 class LHSSampler(PointSampler):
@@ -143,7 +145,7 @@ class LHSSampler(PointSampler):
 
     Parameters
     ----------
-    domain : Domain
+    domain : torchphysics.domain.Domain
         The domain in which the points should be sampled.
     n_points : int
         The number of points that should be sampled. 
@@ -160,17 +162,17 @@ class LHSSampler(PointSampler):
         super().__init__(n_points=n_points)
         self.domain = domain
 
-    def _sample_points(self, **params):
-        num_of_params = self._extract_tensor_len_from_dict(params)
-        point_dict = None
+    def _sample_points(self, params=Points.empty()):
+        num_of_params = max(1, len(params))
+        sample_points = None
         for i in range(num_of_params):
-            ith_params = self._extract_points_from_dict(i, params)
-            bounding_box = self.domain.bounding_box(**ith_params)
+            ith_params = params[i, ]
+            bounding_box = self.domain.bounding_box(ith_params)
             lhs_in_box = self._create_lhs_in_bounding_box(bounding_box)
-            new_points, num_valid = self._check_lhs_inside(lhs_in_box, ith_params)
-            self._append_random_points(new_points, num_valid, ith_params)
-            point_dict = self._set_point_dict(point_dict, new_points)
-        return point_dict
+            new_points = self._check_lhs_inside(lhs_in_box, ith_params)
+            final_points = self._append_random_points(new_points, ith_params)
+            sample_points = self._set_sampled_points(sample_points, final_points)
+        return sample_points
 
     def _create_lhs_in_bounding_box(self, bounding_box):
         lhs_points = torch.zeros((self.n_points, self.domain.dim))
@@ -188,18 +190,16 @@ class LHSSampler(PointSampler):
 
     def _check_lhs_inside(self, lhs_points, ith_params):
         new_points = Points(lhs_points, self.domain.space)
-        repeat_params = self._repeat_input_params(self.n_points, **ith_params)
-        new_points.join(repeat_params)
+        repeat_params = torch.repeat_interleave(ith_params, len(new_points), dim=0)
+        new_points = new_points.join(repeat_params)
         inside = self.domain._contains(new_points)
         index = torch.where(inside)[0]
-        for key, data in new_points.items():
-            new_points[key] = data[index]
-        return new_points, len(index)
+        return new_points[index, ]
 
-    def _append_random_points(self, new_points, num_valid, current_params):
-        if num_valid == self.n_points:
-            return 
+    def _append_random_points(self, new_points, current_params):
+        if len(new_points) == self.n_points:
+            return new_points
         random_sampler = RandomUniformSampler(domain=self.domain,
-                                              n_points=self.n_points-num_valid)
-        random_points = random_sampler.sample_points(**current_params)
-        self._append_point_dict(new_points, random_points)
+                                              n_points=self.n_points-len(new_points))
+        random_points = random_sampler.sample_points(current_params)
+        return new_points | random_points

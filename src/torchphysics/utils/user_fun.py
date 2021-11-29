@@ -2,6 +2,8 @@ import inspect
 import copy 
 import torch
 
+from ..problem.spaces.points import Points
+
 
 class UserFunction:
 
@@ -44,7 +46,9 @@ class UserFunction:
         if not f_kwonlydefaults is None:
             self.defaults.update(f_kwonlydefaults)
 
-    def __call__(self, vectorize=False, **args):
+    def __call__(self, args, vectorize=False):
+        if isinstance(args, Points):
+            args = args.coordinates
         # check that every necessary arg is given
         for key in self.necessary_args:
             assert key in args, \

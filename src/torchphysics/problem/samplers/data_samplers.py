@@ -11,9 +11,9 @@ class DataSampler(PointSampler):
 
     Parameters
     ----------
-    input_data : Points
+    input_data : torchphysics.spaces.Points or dict
         A points object containing the input data for the model.
-    output_data : Points
+    output_data : torchphysics.spaces.Points or dict
         The expected model values at the given input data in the
         correct output space.
     """
@@ -35,5 +35,5 @@ class DataSampler(PointSampler):
         assert len(output_data) == n
         super().__init__(n_points=n)
 
-    def sample_points(self, **params):
+    def sample_points(self, params=Points.empty()):
         return self.input_data, self.output_data

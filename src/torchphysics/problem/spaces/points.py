@@ -1,5 +1,7 @@
 import torch
+
 from .space import Space
+
 
 class Points():
     """
@@ -84,7 +86,7 @@ class Points():
     
     @property
     def isempty(self):
-        return len(self) > 0 and self.space.dim == 0
+        return len(self) == 0 and self.space.dim == 0
 
     def __repr__(self):
         return "{}:\n{}".format(self.__class__.__name__, self.coordinates)
@@ -175,6 +177,9 @@ class Points():
             return self
         assert self.space.keys().isdisjoint(other.space)
         return Points(torch.cat([self._t, other._t], dim=1), self.space * other.space)
+
+    def repeat(self, *sizes):
+        return Points(self._t.repeat(*sizes), self.space)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):

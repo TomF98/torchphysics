@@ -4,6 +4,7 @@ import torch
 from torchphysics.problem.spaces import R2, R1
 from torchphysics.problem.domains import (Circle, Interval, Point, Parallelogram)
 from torchphysics.problem.samplers import *
+from torchphysics.problem.spaces.points import Points
 from torchphysics.utils.user_fun import UserFunction
 
 
@@ -42,83 +43,24 @@ def test_sampler_len_for_density_not_definied():
         len(ps)
 
 
-def test_sampler_param_repeat():
-    ps = PointSampler(n_points=25)
-    test_params = {'t': torch.tensor([[9.0], [4.0]]), 
-                   'x': torch.tensor([[1.0, 1.0], [0.0, 2.0]])}
-    not_repeated = ps._repeat_input_params(1, **test_params)
-    assert test_params == not_repeated
-    repeated = ps._repeat_input_params(2, **test_params)
-    assert all(repeated['t'] == torch.tensor([[9.0], [9.0], [4.0], [4.0]]))
-    assert torch.all(repeated['x'] == \
-                     torch.tensor([[1.0, 1.0], [1.0, 1.0], [0.0, 2.0], [0.0, 2.0]]))
-
-
-def test_sampler_point_repeat():
-    ps = PointSampler(n_points=25)
-    test_params = {'t': torch.tensor([[9.0], [4.0]]), 
-                   'x': torch.tensor([[1.0, 1.0], [0.0, 2.0]])}
-    not_repeated = ps._repeat_sampled_points(1, test_params)
-    assert test_params == not_repeated
-    repeated = ps._repeat_sampled_points(2, test_params)
-    assert all(repeated['t'] == torch.tensor([[9.0], [4.0], [9.0], [4.0]]))
-    assert torch.all(repeated['x'] == \
-                     torch.tensor([[1.0, 1.0], [0.0, 2.0], [1.0, 1.0], [0.0, 2.0]]))
-
-
-def test_sampler_extracts_length_from_dict():
-    ps = PointSampler()
-    test_params = {'t': torch.tensor([[9.0], [4.0], [6.7]]), 
-                   'x': torch.tensor([[1.0, 1.0], [0.0, 2.0], [9, 3]])}
-    num_of_params = ps._extract_tensor_len_from_dict(test_params)  
-    assert num_of_params == 3
-
-
-def test_sampler_extracts_length_from_empty_dict():
-    ps = PointSampler()
-    num_of_params = ps._extract_tensor_len_from_dict({})  
-    assert num_of_params == 1
-
-
-def test_sampler_extracts_length_from_dict():
-    ps = PointSampler()
-    test_params = {'t': torch.tensor([[9.0], [4.0], [6.7]]), 
-                   'x': torch.tensor([[1.0, 1.0], [0.0, 2.0], [9, 3]])}
-    num_of_params = ps._extract_tensor_len_from_dict(test_params)  
-    assert num_of_params == 3
-
-
-def test_sampler_extracts_ith_dict_row():
-    ps = PointSampler()
-    test_params = {'t': torch.tensor([[9.0], [4.0], [6.7]]), 
-                   'x': torch.tensor([[1.0, 1.0], [0.0, 2.0], [9, 3]])}
-    row_0 = ps._extract_points_from_dict(0, test_params)
-    assert row_0['t'] == 9.0
-    assert torch.all(row_0['x'] == torch.tensor([1.0, 1.0])) 
-    row_0 = ps._extract_points_from_dict(2, test_params)
-    assert row_0['t'] == 6.7
-    assert torch.all(row_0['x'] == torch.tensor([9.0, 3.0])) 
-
-
-def test_sampler_append_dictionarys():
-    ps = PointSampler()
-    dict_1 = {'t': torch.tensor([[9.0]]), 
-              'x': torch.tensor([[1.0, 1.0]])}
-    dict_2 = {'t': torch.tensor([[4.0], [6.7]]), 
-              'x': torch.tensor([[0.0, 2.0], [9, 3]])}
-    ps._append_point_dict(dict_1, dict_2)
-    assert torch.all(dict_1['t'] == torch.tensor([[9.0], [4.0], [6.7]]))
-    assert torch.all(dict_1['x'] == torch.tensor([[1.0, 1.0], [0.0, 2.0], [9, 3]]))
-
-
 def test_sampler_apply_filter():
     ps = PointSampler(filter=lambda x: x>=0)
-    test_dict = {'x': torch.tensor([[1.0], [-10], [0.1]]), 
-                 't': torch.tensor([[1.0, 0.0], [2.3, 2.3], [0.0, 0.0]])}
-    n = ps._apply_filter(test_dict)
-    assert n == 2
-    assert torch.all(test_dict['x'] == torch.tensor([[1.0], [0.1]]))
-    assert torch.all(test_dict['t'] == torch.tensor([[1.0, 0.0], [0.0, 0.0]]))
+    test_points = Points(torch.tensor([[1.0, 1.0, 0.0], [-10, 2.3, 2.3],
+                                       [0.1, 0.0, 0.0]]), R1('x')*R2('t'))
+    filtered_points = ps._apply_filter(test_points)
+    assert len(filtered_points) == 2
+    assert torch.all(filtered_points[:, ['x']].as_tensor == \
+                     torch.tensor([[1.0], [0.1]]))
+    assert torch.all(filtered_points[:, ['t']].as_tensor == \
+                     torch.tensor([[1.0, 0.0], [0.0, 0.0]]))
+
+
+def test_sampler_get_iterator():
+    ps = PointSampler()
+    my_iter = iter(ps)
+    assert my_iter == ps
+    with pytest.raises(NotImplementedError):
+        next(my_iter)
 
 
 def test_sampler_iteration_check():
@@ -128,7 +70,7 @@ def test_sampler_iteration_check():
 
 def test_sampler_iteration_check_warning():
     ps = PointSampler()
-    with pytest.warns(None):
+    with pytest.warns(UserWarning):
         ps._check_iteration_number(10, 10)
 
 
@@ -187,7 +129,7 @@ def test_random_sampler():
     C = Circle(R2('x'), [0, 0], 3)
     ps = RandomUniformSampler(C, 50)
     points = ps.sample_points()
-    assert points['x'].shape == (50, 2)
+    assert points.as_tensor.shape == (50, 2)
     assert all(C.__contains__(points))
 
 
@@ -195,7 +137,7 @@ def test_random_sampler_density():
     C = Circle(R2('x'), [0, 0], 3)
     ps = RandomUniformSampler(C, density=0.5)
     points = ps.sample_points()
-    assert points['x'].shape == (114, 2)
+    assert points.as_tensor.shape == (114, 2)
     assert all(C.__contains__(points))
 
 
@@ -206,7 +148,7 @@ def test_random_sampler_product():
     ps_C = RandomUniformSampler(C, n_points=20)
     ps = ps_C * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 2)
+    assert points.as_tensor.shape == (200, 3)
     assert all(C.__contains__(points))
 
 
@@ -224,7 +166,7 @@ def test_random_sampler_with_filter_and_density():
     C = Circle(R2('x'), [0, 0], 3)
     ps = RandomUniformSampler(C, density=0.4, filter=filter_func)
     points = ps.sample_points()
-    assert torch.all(filter_func(x=points['x']))
+    assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
@@ -232,8 +174,8 @@ def test_random_sampler_with_filter_and_n_and_without_params():
     C = Circle(R2('x'), [0, 0], 3)
     ps = RandomUniformSampler(C, n_points=20, filter=filter_func)
     points = ps.sample_points()
-    assert points['x'].shape == (20, 2)
-    assert torch.all(filter_func(x=points['x']))
+    assert points.as_tensor.shape == (20, 2)
+    assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
@@ -244,9 +186,9 @@ def test_random_sampler_with_filter_and_n_and_with_params():
     ps = RandomUniformSampler(C, n_points=50, filter=filter_func)
     ps *= pi 
     points = ps.sample_points()
-    assert points['x'].shape == (500, 2)
-    assert points['t'].shape == (500, 1)
-    assert torch.all(filter_func(x=points['x']))
+    assert points[:, ['x']].as_tensor.shape == (500, 2)
+    assert points[:, ['t']].as_tensor.shape == (500, 1)
+    assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
@@ -254,7 +196,7 @@ def test_grid_sampler():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     ps = GridSampler(P, 50)
     points = ps.sample_points()
-    assert points['x'].shape == (50, 2)
+    assert points.as_tensor.shape == (50, 2)
     assert all(P.__contains__(points))
 
 
@@ -262,7 +204,7 @@ def test_grid_sampler_density():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     ps = GridSampler(P, density=0.5)
     points = ps.sample_points()
-    assert points['x'].shape == (8, 2)
+    assert points.as_tensor.shape == (8, 2)
     assert all(P.__contains__(points))
 
 
@@ -273,7 +215,8 @@ def test_grid_sampler_product():
     ps_C = GridSampler(C, n_points=20)
     ps = ps_C * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 2)
+    assert points[:, ['x']].as_tensor.shape == (200, 2)
+    assert points[:, ['t']].as_tensor.shape == (200, 1)
     assert all(C.__contains__(points))
 
 
@@ -284,15 +227,16 @@ def test_grid_sampler_sum():
     ps_2 = GridSampler(C, n_points=20)
     ps = ps_1 + ps_2
     points = ps.sample_points()
-    assert points['x'].shape == (30, 2)
+    assert points.as_tensor.shape == (30, 2)
     assert all(C.__contains__(points))
+    assert len(ps) == 30
 
 
 def test_grid_sampler_with_filter_and_density():
     C = Circle(R2('x'), [0, 0], 3)
     ps = GridSampler(C.boundary, density=0.4, filter=filter_func)
     points = ps.sample_points()
-    assert torch.all(filter_func(x=points['x']))
+    assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.boundary.__contains__(points))
 
 
@@ -300,21 +244,21 @@ def test_grid_sampler_with_filter_and_n_and_without_params():
     C = Circle(R2('x'), [0, 0], 3)
     ps = GridSampler(C, n_points=20, filter=filter_func)
     points = ps.sample_points()
-    assert points['x'].shape == (20, 2)
-    assert torch.all(filter_func(x=points['x']))
+    assert points.as_tensor.shape == (20, 2)
+    assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
 def test_grid_sampler_with_filter_and_n_and_with_params():
-    I = Interval(R1('t'), 0, 2)
-    C = Circle(R2('x'), [0, 0], lambda t: t+1)
+    I = Interval(R1('D'), 0, 2)
+    C = Circle(R2('x'), [0, 0], lambda D: D+1)
     pi = GridSampler(I, n_points=10)
     ps = GridSampler(C, n_points=50, filter=filter_func)
     ps *= pi 
     points = ps.sample_points()
-    assert points['x'].shape == (500, 2)
-    assert points['t'].shape == (500, 1)
-    assert torch.all(filter_func(x=points['x']))
+    assert points[:, ['x']].as_tensor.shape == (500, 2)
+    assert points[:, ['D']].as_tensor.shape == (500, 1)
+    assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
@@ -324,8 +268,8 @@ def test_grid_sampler_with_filter_and_n_and_all_points_valid():
     C = Circle(R2('x'), [0, 0], 3)
     ps = GridSampler(C, n_points=20, filter=redudant_filter)
     points = ps.sample_points()
-    assert points['x'].shape == (20, 2)
-    assert torch.all(redudant_filter(x=points['x']))
+    assert points.as_tensor.shape == (20, 2)
+    assert torch.all(redudant_filter(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
@@ -343,41 +287,43 @@ def test_grid_sampler_resample_grid_warning():
         return x[:, 0] <= 10
     C = Circle(R2('x'), [0, 0], 3)
     ps = GridSampler(C, n_points=10, filter=redudant_filter)
-    with pytest.warns(None):
-        points = ps._resample_grid({}, 0, ps.domain.sample_grid, {})
-    assert points['x'].shape == (110, 2)
-    assert torch.all(redudant_filter(x=points['x']))
+    with pytest.warns(UserWarning):
+        points = ps._resample_grid(Points.empty(), Points.empty(),
+                                   ps.domain.sample_grid)
+    assert points.as_tensor.shape == (110, 2)
+    assert torch.all(redudant_filter(x=points.as_tensor))
     assert all(C.__contains__(points))
 
 
 def test_grid_sampler_append_no_random_points():
-    C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C, n_points=10, filter=filter_func)
-    assert ps._append_random_points({}, 10, {}) is None
+    a = torch.ones((10, 1))
+    ps = GridSampler(None, n_points=10)
+    assert torch.equal(ps._append_random_points(a, None), a)
 
 
 def test_spaced_grid_sampler():
     I = Interval(R1('t'), 0, 1)
-    ps = SpacedGridSampler(I, 50, exponent=2)
+    ps = ExponentialIntervalSampler(I, 50, exponent=2)
     points = ps.sample_points()
-    assert points['t'].shape == (50, 1)
+    assert points.as_tensor.shape == (50, 1)
     assert all(I.__contains__(points))
 
 
 def test_spaced_grid_sampler_wrong_domain_type():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     with pytest.raises(AssertionError):
-        _ = SpacedGridSampler(P, 50, exponent=2)
+        _ = ExponentialIntervalSampler(P, 50, exponent=2)
 
 
 def test_spaced_grid_sampler_product():
     I = Interval(R1('t'), 0, 1)
     I_2 = Interval(R1('x'), 0, lambda t : t+1)
     ps_I = GridSampler(I, n_points=10)
-    ps_I_2 = SpacedGridSampler(I_2, n_points=20, exponent=3.2)
+    ps_I_2 = ExponentialIntervalSampler(I_2, n_points=20, exponent=3.2)
     ps = ps_I_2 * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 1)
+    assert len(ps) == 200
+    assert points.as_tensor.shape == (200, 2)
     assert all(I_2.__contains__(points))
 
 
@@ -385,13 +331,14 @@ def test_spaced_grid_sampler_append():
     I = Interval(R1('t'), 0, 1)
     I_2 = Interval(R1('x'), 0, 2)
     ps_I = GridSampler(I, n_points=10)
-    ps_I_2 = SpacedGridSampler(I_2, n_points=10, exponent=0.4)
+    ps_I_2 = ExponentialIntervalSampler(I_2, n_points=10, exponent=0.4)
     ps = ps_I.append(ps_I_2)
     points = ps.sample_points()
-    assert points['x'].shape == (10, 1)
-    assert points['t'].shape == (10, 1)
+    assert points[:, ['x']].as_tensor.shape == (10, 1)
+    assert points[:, ['t']].as_tensor.shape == (10, 1)
     assert all(I_2.__contains__(points))
     assert all(I.__contains__(points))
+    assert len(ps) == 10
 
 
 # plot samplers
@@ -420,7 +367,7 @@ def test_plot_sampler_creation_with_density():
     assert isinstance(ps.sampler, ConcatSampler)
 
 
-def test_plot_sampler_creation_with_intrval():
+def test_plot_sampler_creation_with_interval():
     I = Interval(R1('t'), 0, 2)
     ps = PlotSampler(I, n_points=34)
     assert isinstance(ps.sampler, ConcatSampler)
@@ -438,52 +385,21 @@ def test_plot_sampler_creation_with_intrval_with_density():
 
 def test_plot_sampler_creation_for_variable_domain():
     C = Circle(R2('x'), [0, 0], lambda t: t+1)
-    ps = PlotSampler(C, n_points=34, dic_for_other_variables={'t': 1.0, 'D': [9.0, 2.0]})
+    ps = PlotSampler(C, n_points=34, 
+                     data_for_other_variables={'t': 1.0, 'D': [9.0, 2.0], 
+                                               'r': torch.tensor([[0.2]])})
     assert len(ps) == 34
     assert ps.domain.center.fun == [0, 0]
     assert ps.domain.radius.fun == 2
 
 
-def test_plot_sampler_transform_dict_to_tensors():
-    C = Circle(R2('x'), [0, 0], 1)
-    ps = PlotSampler(C, n_points=34)
-    ps.dic_for_other_variables = {'x': 3.0, 't': [0, 0.0], 'D': torch.tensor([0.9])}
-    tensor_dict = ps._transform_input_dict_to_tensor_dict()
-    for key, item in ps.dic_for_other_variables.items():
-        assert isinstance(tensor_dict[key], torch.Tensor)
-        if isinstance(item, torch.Tensor):
-            assert torch.allclose(tensor_dict[key], item)   
-        else:
-            assert torch.allclose(tensor_dict[key], torch.tensor(item))   
-
-
-def test_plot_sampler_set_device_and_grad():
-    C = Circle(R2('x'), [0, 0], 1)
-    ps = PlotSampler(C, n_points=34)
-    test_dict = {'t': torch.tensor([9.0]), 'x':torch.tensor([[2, 3.0]])}
-    ps._set_device_and_grad_true(test_dict)
-    for item in test_dict.values():
-        assert item.requires_grad
-        assert item.device.type == 'cpu'   
-
-
-def test_plot_sampler_transform_other_dict_data_to_tensor():
-    C = Circle(R2('x'), [0, 0], 1)
-    ps = PlotSampler(C, n_points=34)
-    ps.dic_for_other_variables = {'x': 3.0, 't': [0, 0.0]}
-    test_dict = {}
-    ps._add_other_variables(test_dict)
-    assert test_dict['x'].shape == (34, 1)
-    assert test_dict['t'].shape == (34, 2)
-
-
-def test_plot_sampler_transform_wrong_data_type():
-    C = Circle(R2('x'), [0, 0], 1)
-    ps = PlotSampler(C, n_points=34)
-    ps.dic_for_other_variables = {'x': C}
-    test_dict = {}
-    with pytest.raises(TypeError):
-        ps._add_other_variables(test_dict)
+def test_plot_sampler_creation_for_variable_domain_with_point_data():
+    C = Circle(R2('x'), [0, 0], lambda t: t+1)
+    data = Points(torch.tensor([[1.0, 9, 2.0]]), R1('t')*R2('D'))
+    ps = PlotSampler(C, n_points=34, data_for_other_variables=data)
+    assert len(ps) == 34
+    assert ps.domain.center.fun == [0, 0]
+    assert ps.domain.radius.fun == 2
 
 
 def test_plot_sampler_create_points():
@@ -501,7 +417,7 @@ def test_gaussian_sampler():
     I = Interval(R1('t'), 0, 1)
     ps = GaussianSampler(I, 50, mean=0.2, std=0.1)
     points = ps.sample_points()
-    assert points['t'].shape == (50, 1)
+    assert points.as_tensor.shape == (50, 1)
     assert all(I.__contains__(points))
 
 
@@ -509,7 +425,7 @@ def test_gaussian_sampler_in_2D():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     ps = GaussianSampler(P, 100, mean=[0.2, 0.3], std=0.1)
     points = ps.sample_points()
-    assert points['x'].shape == (100, 2)
+    assert points.as_tensor.shape == (100, 2)
     assert all(P.__contains__(points))
 
 
@@ -532,8 +448,8 @@ def test_gaussian_sampler_product():
     ps_I_2 = GaussianSampler(I_2, n_points=20, mean=1, std=0.3)
     ps = ps_I_2 * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 1)
-    assert points['t'].shape == (200, 1)
+    assert points[:, ['x']].as_tensor.shape == (200, 1)
+    assert points[:, ['t']].as_tensor.shape == (200, 1)
     assert all(I_2.__contains__(points))
 
 
@@ -544,8 +460,8 @@ def test_gaussian_sampler_product_in_2D():
     ps_I_2 = GaussianSampler(C, n_points=20, mean=[-2, 0], std=0.3)
     ps = ps_I_2 * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 2)
-    assert points['t'].shape == (200, 1)
+    assert points[:, ['x']].as_tensor.shape == (200, 2)
+    assert points[:, ['t']].as_tensor.shape == (200, 1)
     assert all(C.__contains__(points))
 
 
@@ -556,7 +472,7 @@ def test_lhs_sampler():
     I = Interval(R1('t'), 0, 1)
     ps = LHSSampler(I, 50)
     points = ps.sample_points()
-    assert points['t'].shape == (50, 1)
+    assert points.as_tensor.shape == (50, 1)
     assert all(I.__contains__(points))
 
 
@@ -564,7 +480,7 @@ def test_lhs_sampler_in_2D():
     P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     ps = LHSSampler(P, 100)
     points = ps.sample_points()
-    assert points['x'].shape == (100, 2)
+    assert points.as_tensor.shape == (100, 2)
     assert all(P.__contains__(points))
 
 
@@ -576,13 +492,13 @@ def test_lhs_sampler_wrong_domain_type():
 
 def test_lhs_sampler_product():
     I = Interval(R1('t'), 0, 1)
-    I_2 = Interval(R1('x'), 0, lambda t : t+1)
+    I_2 = Interval(R1('z'), 0, lambda t : t+1)
     ps_I = GridSampler(I, n_points=10)
     ps_I_2 = LHSSampler(I_2, n_points=20)
     ps = ps_I_2 * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 1)
-    assert points['t'].shape == (200, 1)
+    assert points[:, ['z']].as_tensor.shape == (200, 1)
+    assert points[:, ['t']].as_tensor.shape == (200, 1)
     assert all(I_2.__contains__(points))
 
 
@@ -593,7 +509,41 @@ def test_lhs_sampler_product_in_2D():
     ps_I_2 = LHSSampler(C, n_points=20)
     ps = ps_I_2 * ps_I
     points = ps.sample_points()
-    assert points['x'].shape == (200, 2)
-    assert points['t'].shape == (200, 1)
-    assert points['y'].shape == (200, 1)
+    assert points.as_tensor.shape == (200, 4)
     assert all(C.__contains__(points))
+
+
+# Test datasamplers:
+
+def test_create_data_sampler_with_dict():
+    input_data = {'x': torch.tensor([[0.0, 0.0], [1.0, 2.0]])}
+    output_data = {'u': torch.tensor([[0.0], [2.0]])}
+    ps = DataSampler(input_data, output_data)
+    i, o = ps.sample_points()
+    assert isinstance(i, Points)
+    assert isinstance(o, Points)
+    assert torch.equal(input_data['x'], i.as_tensor)
+    assert torch.equal(output_data['u'], o.as_tensor)
+
+
+def test_create_data_sampler_with_points():
+    input_data = Points(torch.tensor([[0.0, 0.0], [1.0, 2.0]]), R2('y'))
+    output_data = Points(torch.tensor([[0.0], [2.0]]), R1('t'))
+    ps = DataSampler(input_data, output_data)
+    i, o = ps.sample_points()
+    assert isinstance(i, Points)
+    assert isinstance(o, Points)
+
+
+def test_create_data_sampler_with_wrong_data_input():
+    input_data = 'wrong_input'
+    output_data = Points(torch.tensor([[0.0], [2.0]]), R1('t'))
+    with pytest.raises(TypeError):
+        DataSampler(input_data, output_data)
+
+
+def test_create_data_sampler_with_wrong_data_output():
+    output_data = 'wrong_output'
+    input_data = Points(torch.tensor([[0.0], [2.0]]), R1('t'))
+    with pytest.raises(TypeError):
+        DataSampler(input_data, output_data)

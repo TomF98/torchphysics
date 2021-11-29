@@ -5,6 +5,7 @@ import torch
 import warnings
 
 from ...utils.user_fun import UserFunction
+from ..spaces.points import Points
 
 
 class PointSampler:
@@ -65,12 +66,12 @@ class PointSampler:
                                 Set the length by using .set_length, if this 
                                 property is needed""")
 
-    def sample_points(self, **params):
+    def sample_points(self, params=Points.empty()):
         """The methode that creates the points.
 
         Parameters
         ----------
-        **params :
+        **params : torchphysics.spaces.Points
             Additional parameters for the domain.
 
         Returns
@@ -82,16 +83,16 @@ class PointSampler:
             valid point in the given domain.
         """
         if self.filter:
-            return self._sample_points_with_filter(**params)
+            return self._sample_points_with_filter(params)
         else:
-            return self._sample_points(**params)
+            return self._sample_points(params)
 
     @abc.abstractmethod
-    def _sample_points_with_filter(self, **params):
+    def _sample_points_with_filter(self, params=Points.empty()):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _sample_points(self, **params):
+    def _sample_points(self, params=Points.empty()):
         raise NotImplementedError
 
     def __mul__(self, other):
@@ -109,78 +110,46 @@ class PointSampler:
         assert isinstance(other, PointSampler)
         return AppendSampler(self, other)
 
-    def _repeat_input_params(self, n, **params):
-        repeated_params = params
-        if n > 1:
-            for key, domain_param in params.items():
-                # will repeat like ([[a], [b]]) -> ([[a], [a], [a], [b], [b], [b]])
-                repeated_params[key] = domain_param.repeat_interleave(repeats=n, dim=0)
-        return repeated_params
-
-    def _repeat_sampled_points(self, n, point_dict):
-        repeated_params = point_dict
-        if n > 1:
-            for key, points in point_dict.items():
-                # will repeat like ([[a], [b]]) -> ([[a], [b]], [[a], [b]], [[a], [b]])
-                repeated_params[key] = points.repeat(n, 1)
-        return repeated_params
-
-    def _sample_params_independent(self, sample_function, **params):
+    def _sample_params_independent(self, sample_function, params):
         """If the domain is independent of the used params it is more efficent
         to sample points once and then copy them accordingly.
         """
         points = sample_function(n=self.n_points, d=self.density)
-        num_of_points = self._extract_tensor_len_from_dict(points)
+        num_of_points = len(points)
         self.set_length(num_of_points)
-        num_of_params = self._extract_tensor_len_from_dict(params)
-        repeated_params = self._repeat_input_params(num_of_points, **params)
-        grid_points = self._repeat_sampled_points(num_of_params, points)
-        return {**grid_points, **repeated_params}
+        num_of_params = max(1, len(params))
+        repeated_params = torch.repeat_interleave(params, num_of_points, dim=0)
+        repeated_points = points.repeat(num_of_params, 1)
+        return repeated_points.join(repeated_params)
 
-    def _sample_params_dependent(self, sample_function, **params):
+    def _sample_params_dependent(self, sample_function, params):
         """If the domain is dependent on some params, we can't always sample points
         for all params at once. Therefore we need a loop to iterate over the params.
         This happens for example with denstiy sampling or grid sampling. 
         """
-        num_of_params = self._extract_tensor_len_from_dict(params)
-        sample_dict = None
+        num_of_params = max(1, len(params))
+        sample_points = None
         for i in range(num_of_params):
-            new_points, repeated_params = self._sample_for_ith_param(sample_function,
-                                                                     params, i)
-            sample_dict = self._set_point_dict(sample_dict,
-                                               {**new_points, **repeated_params})
-        return sample_dict
+            new_points = self._sample_for_ith_param(sample_function, params, i)
+            sample_points = self._set_sampled_points(sample_points, new_points)
+        return sample_points
 
     def _sample_for_ith_param(self, sample_function, params, i):
-        ith_params = self._extract_points_from_dict(i, params)
-        new_points = sample_function(self.n_points, self.density, **ith_params)
-        num_of_points = self._extract_tensor_len_from_dict(new_points)
-        repeated_params = self._repeat_input_params(num_of_points, **ith_params)
-        return new_points, repeated_params
+        ith_params = params[i, ]
+        new_points = sample_function(self.n_points, self.density, ith_params)
+        num_of_points = len(new_points)
+        repeated_params = torch.repeat_interleave(ith_params, num_of_points, dim=0)
+        return new_points.join(repeated_params)
 
-    def _extract_points_from_dict(self, i, params):
-        ith_params = {}
-        for key in params.keys():
-            ith_params[key] = params[key][None, i]
-        return ith_params
+    def _set_sampled_points(self, sample_points, new_points):
+        if not sample_points:
+            return new_points
+        return sample_points | new_points
 
-    def _set_point_dict(self, point_dict, new_points_dict):
-        if not point_dict:
-            point_dict = new_points_dict
-        else:
-            self._append_point_dict(point_dict, new_points_dict)
-        return point_dict
-
-    def _append_point_dict(self, sample_dict, new_point_dic):
-        for key in sample_dict.keys():
-            sample_dict[key] = torch.cat((sample_dict[key], new_point_dic[key]), dim=0)
-
-    def _apply_filter(self, point_dict):
-        filter_true = self.filter(**point_dict)
+    def _apply_filter(self, sample_points):
+        filter_true = self.filter(sample_points)
         index = torch.where(filter_true)[0]
-        for key, data in point_dict.items():
-            point_dict[key] = data[index]
-        return len(index)
+        return sample_points[index, ]
 
     def _check_iteration_number(self, iterations, num_of_new_points):
         if iterations == 10:
@@ -192,9 +161,8 @@ class PointSampler:
             raise RuntimeError("""Run 20 iterations and could not find a single 
                                   valid point for the filter condition.""") 
 
-    def _cut_tensor_to_length_n(self, new_points_dict):
-        for key, data in new_points_dict.items():
-            new_points_dict[key] = data[:self.n_points]
+    def _cut_tensor_to_length_n(self, points):
+        return points[:self.n_points, ]
 
 
 class ProductSampler(PointSampler):
@@ -212,11 +180,14 @@ class ProductSampler(PointSampler):
         super().__init__()
 
     def __len__(self):
+        if self.length:
+            return self.length
         return len(self.sampler_a) * len(self.sampler_b)
 
-    def sample_points(self, **params):
-        b_points = self.sampler_b.sample_points(**params)
-        a_points = self.sampler_a.sample_points(**params, **b_points)
+    def sample_points(self, params=Points.empty()):
+        b_points = self.sampler_b.sample_points(params)
+        a_points = self.sampler_a.sample_points(b_points.join(params))
+        self.set_length(len(a_points))
         return a_points
 
 
@@ -235,14 +206,15 @@ class ConcatSampler(PointSampler):
         super().__init__()
 
     def __len__(self):
+        if self.length:
+            return self.length
         return len(self.sampler_a) + len(self.sampler_b)
 
-    def sample_points(self, **params):
-        samples_a = self.sampler_a.sample_points(**params)
-        samples_b = self.sampler_b.sample_points(**params)
-        for vname in samples_a:
-            samples_a[vname] = torch.cat((samples_a[vname], samples_b[vname]), dim=0)
-        return samples_a
+    def sample_points(self, params=Points.empty()):
+        samples_a = self.sampler_a.sample_points(params)
+        samples_b = self.sampler_b.sample_points(params)
+        self.set_length(len(samples_a) + len(samples_b))
+        return samples_a | samples_b
 
 
 class AppendSampler(PointSampler):
@@ -260,9 +232,12 @@ class AppendSampler(PointSampler):
         super().__init__()
 
     def __len__(self):
+        if self.length:
+            return self.length
         return len(self.sampler_a)
 
-    def sample_points(self, **params):
-        samples_a = self.sampler_a.sample_points(**params)
-        samples_b = self.sampler_b.sample_points(**params)
-        return  {**samples_a, **samples_b}
+    def sample_points(self, params=Points.empty()):
+        samples_a = self.sampler_a.sample_points(params)
+        samples_b = self.sampler_b.sample_points(params)
+        self.set_length(len(samples_a))
+        return samples_a.join(samples_b)
