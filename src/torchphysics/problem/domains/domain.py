@@ -197,15 +197,9 @@ class Domain:
         n = torch.ceil(volume / d**self.dim)
         return int(n)
 
-    def _repeat_params(self, n, **args):
-        repeated_params = {}
-        param_len = 1
-        for key, domain_param in args.items():
-            repeated_params[key] = torch.repeat_interleave(domain_param, n, dim=0)
-            param_len = len(repeated_params[key])
-        if param_len > 1:
-            n = 1
-        return n, repeated_params
+    def _repeat_params(self, n, params):
+        repeated_params = torch.repeat_interleave(params, n, dim=0)
+        return 1 if len(repeated_params) else n, repeated_params
 
 
 class BoundaryDomain(Domain):
