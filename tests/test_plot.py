@@ -2,11 +2,12 @@ import pytest
 import torch
 import matplotlib.pyplot as pyplot
 
-import torchphysics.utils.plot as plt  
+import torchphysics.utils.plotting.plot as plt  
 from torchphysics.problem.domains import Interval, Circle, Parallelogram
 from torchphysics.problem.spaces import R2, R1
 from torchphysics.problem.samplers import PlotSampler
 from torchphysics.models.fcn import SimpleFCN
+from torchphysics.problem.spaces.points import Points
 
 
 def plt_func(u):
@@ -14,11 +15,11 @@ def plt_func(u):
 
 
 def test_plot_create_info_text():
-    input = {'t': 3, 'D': 34}
-    text = plt._create_info_text(input)
-    assert text == 't = 3\nD = 34'
-    input = {}
-    text = plt._create_info_text(input)
+    input_p = Points(torch.tensor([[3.0, 34]]), R1('t')*R1('D'))
+    text = plt._create_info_text(input_p)
+    assert text == 't = 3.0\nD = 34.0'
+    input_p = Points.empty()
+    text = plt._create_info_text(input_p)
     assert text == ''
 
 
@@ -26,14 +27,15 @@ def test_plot_triangulation_of_domain():
     domain = Parallelogram(R2('x'), [0, 0], [1, 0.0], [0, 1])
     ps = PlotSampler(domain, n_points=200)
     domain_points = ps.sample_points()
-    triangulation = plt._triangulation_of_domain(domain,
-                                                 domain_points['x'].detach().numpy()) 
-    assert len(triangulation.x) == len(domain_points['x'])
-    assert len(triangulation.y) == len(domain_points['x'])
+    numpy_points = domain_points.as_tensor.detach().numpy()
+    triangulation = plt._triangulation_of_domain(domain, numpy_points) 
+    assert len(triangulation.x) == len(numpy_points)
+    assert len(triangulation.y) == len(numpy_points)
     points = torch.column_stack((torch.FloatTensor(triangulation.x),
-                                 torch.FloatTensor(triangulation.y)))
-    assert all(torch.logical_or(domain._contains({'x':points}),
-                                domain.boundary._contains({'x': points})))
+                                torch.FloatTensor(triangulation.y)))
+    points = Points(points, R2('x'))
+    assert all(torch.logical_or(domain._contains(points),
+                                domain.boundary._contains(points)))
 
 
 def test_Plotter():
@@ -76,7 +78,7 @@ def test_line_plot_with_wrong_function_shape():
 
 def test_1D_plot_with_textbox():
     domain = Interval(R1('x'), 0, 1)
-    ps = PlotSampler(domain, n_points=200, dic_for_other_variables={'t': 2})
+    ps = PlotSampler(domain, n_points=200, data_for_other_variables={'t': 2})
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps)
     model = SimpleFCN(variable_dims={'x':1, 't': 1},
                       solution_dims={'u':1},
@@ -163,7 +165,7 @@ def test_2D_quiver_with_textbox():
     def quiver_plt(u):
         return u.detach().cpu().numpy()
     P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 2])
-    ps = PlotSampler(P, density=0.1, dic_for_other_variables={'t': 2})
+    ps = PlotSampler(P, density=0.1, data_for_other_variables={'t': 2.023223})
     plotter = plt.Plotter(plot_function=quiver_plt, point_sampler=ps)
     model = SimpleFCN(variable_dims={'x':2, 't':1},
                       solution_dims={'u':2},
@@ -178,7 +180,7 @@ def test_2D_quiver_with_textbox():
 
 def test_3D_curve():
     I = Interval(R1('i'), -1, 2)
-    ps = PlotSampler(I, density=0.1, dic_for_other_variables={'t': 2})
+    ps = PlotSampler(I, density=0.1, data_for_other_variables={'t': 2})
     plotter = plt.Plotter(plot_function=lambda u:u, point_sampler=ps)
     model = SimpleFCN(variable_dims={'i': 1, 't':1},
                       solution_dims={'u': 2},
@@ -210,7 +212,7 @@ def test_contour_2D_with_textbox():
     model = SimpleFCN(variable_dims={'R': 2, 't': 2},
                       solution_dims={'u': 2},
                       width=5, depth=1)    
-    ps = PlotSampler(P, n_points=500, dic_for_other_variables={'t': [2.0, 0.0]})
+    ps = PlotSampler(P, n_points=500, data_for_other_variables={'t': [2.0, 0.0]})
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps,
                           plot_type='contour_surface')
     fig = plotter.plot(model=model)  
