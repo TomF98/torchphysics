@@ -107,8 +107,7 @@ class PlotSampler(PointSampler):
     def sample_points(self):
         plot_points = self.sampler.sample_points()
         self.set_length(len(plot_points))
-        other_data = torch.repeat_interleave(self.data_for_other_variables, 
-                                             len(self), dim=0)
+        other_data = self._repeat_params(self.data_for_other_variables, len(self))
         plot_points = plot_points.join(other_data)
         self._set_device_and_grad_true(plot_points)
         return plot_points
