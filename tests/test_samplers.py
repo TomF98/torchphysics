@@ -16,14 +16,14 @@ def test_sampler_creation():
     ps = PointSampler(n_points=40, density=0.3)
     assert ps.n_points == 40
     assert ps.density == 0.3
-    assert ps.filter == None
+    assert ps.filter_fn == None
 
 
 def test_sampler_creation_with_filter():
-    ps = PointSampler(n_points=410, density=0.5, filter=lambda t: 2*t)
+    ps = PointSampler(n_points=410, density=0.5, filter_fn=lambda t: 2*t)
     assert ps.n_points == 410
     assert ps.density == 0.5
-    assert isinstance(ps.filter, UserFunction)
+    assert isinstance(ps.filter_fn, UserFunction)
 
 
 def test_sampler_len_for_n():
@@ -44,7 +44,7 @@ def test_sampler_len_for_density_not_definied():
 
 
 def test_sampler_apply_filter():
-    ps = PointSampler(filter=lambda x: x>=0)
+    ps = PointSampler(filter_fn=lambda x: x>=0)
     test_points = Points(torch.tensor([[1.0, 1.0, 0.0], [-10, 2.3, 2.3],
                                        [0.1, 0.0, 0.0]]), R1('x')*R2('t'))
     filtered_points = ps._apply_filter(test_points)
@@ -164,7 +164,7 @@ def test_random_sampler_product_with_density():
 
 def test_random_sampler_with_filter_and_density():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = RandomUniformSampler(C, density=0.4, filter=filter_func)
+    ps = RandomUniformSampler(C, density=0.4, filter_fn=filter_func)
     points = ps.sample_points()
     assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
@@ -172,7 +172,7 @@ def test_random_sampler_with_filter_and_density():
 
 def test_random_sampler_with_filter_and_n_and_without_params():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = RandomUniformSampler(C, n_points=20, filter=filter_func)
+    ps = RandomUniformSampler(C, n_points=20, filter_fn=filter_func)
     points = ps.sample_points()
     assert points.as_tensor.shape == (20, 2)
     assert torch.all(filter_func(x=points.as_tensor))
@@ -183,7 +183,7 @@ def test_random_sampler_with_filter_and_n_and_with_params():
     I = Interval(R1('t'), 0, 2)
     C = Circle(R2('x'), [0, 0], lambda t: t+1)
     pi = RandomUniformSampler(I, n_points=10)
-    ps = RandomUniformSampler(C, n_points=50, filter=filter_func)
+    ps = RandomUniformSampler(C, n_points=50, filter_fn=filter_func)
     ps *= pi 
     points = ps.sample_points()
     assert points[:, ['x']].as_tensor.shape == (500, 2)
@@ -234,7 +234,7 @@ def test_grid_sampler_sum():
 
 def test_grid_sampler_with_filter_and_density():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C.boundary, density=0.4, filter=filter_func)
+    ps = GridSampler(C.boundary, density=0.4, filter_fn=filter_func)
     points = ps.sample_points()
     assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.boundary.__contains__(points))
@@ -242,7 +242,7 @@ def test_grid_sampler_with_filter_and_density():
 
 def test_grid_sampler_with_filter_and_n_and_without_params():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C, n_points=20, filter=filter_func)
+    ps = GridSampler(C, n_points=20, filter_fn=filter_func)
     points = ps.sample_points()
     assert points.as_tensor.shape == (20, 2)
     assert torch.all(filter_func(x=points.as_tensor))
@@ -253,7 +253,7 @@ def test_grid_sampler_with_filter_and_n_and_with_params():
     I = Interval(R1('D'), 0, 2)
     C = Circle(R2('x'), [0, 0], lambda D: D+1)
     pi = GridSampler(I, n_points=10)
-    ps = GridSampler(C, n_points=50, filter=filter_func)
+    ps = GridSampler(C, n_points=50, filter_fn=filter_func)
     ps *= pi 
     points = ps.sample_points()
     assert points[:, ['x']].as_tensor.shape == (500, 2)
@@ -266,7 +266,7 @@ def test_grid_sampler_with_filter_and_n_and_all_points_valid():
     def redudant_filter(x):
         return x[:, 0] <= 10
     C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C, n_points=20, filter=redudant_filter)
+    ps = GridSampler(C, n_points=20, filter_fn=redudant_filter)
     points = ps.sample_points()
     assert points.as_tensor.shape == (20, 2)
     assert torch.all(redudant_filter(x=points.as_tensor))
@@ -277,7 +277,7 @@ def test_grid_sampler_with_impossible_filter_and_n():
     def impossible_filter(x):
         return x[:, 0] <= -10
     C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C, n_points=20, filter=impossible_filter)
+    ps = GridSampler(C, n_points=20, filter_fn=impossible_filter)
     with pytest.raises(RuntimeError):
         _ = ps.sample_points()
 
@@ -286,7 +286,7 @@ def test_grid_sampler_resample_grid_warning():
     def redudant_filter(x):
         return x[:, 0] <= 10
     C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C, n_points=10, filter=redudant_filter)
+    ps = GridSampler(C, n_points=10, filter_fn=redudant_filter)
     with pytest.warns(UserWarning):
         points = ps._resample_grid(Points.empty(), Points.empty(),
                                    ps.domain.sample_grid)
