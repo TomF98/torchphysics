@@ -8,10 +8,11 @@ from ..domains.domain import BoundaryDomain
 from ..domains import Interval
 from .sampler_base import PointSampler
 from .grid_samplers import GridSampler
+from ..spaces.points import Points
 
 
 class PlotSampler(PointSampler):
-    """A sampler that creates a equidistant point grid over a domain
+    """A sampler that creates a point grid over a domain
     (including the boundary). Only used for plotting,
 
     Parameters
@@ -25,7 +26,7 @@ class PlotSampler(PointSampler):
         The desiered density of the created points.
     device : str or torch device, optional
         The device of the model/function.
-    dic_for_other_variables : dict, optional
+    data_for_other_variables : dict or torchphysics.spaces.Points, optional
         Since the plot will only evaluate the model at a specific point, 
         the values for all other variables are needed. 
         E.g. {'t' : 1, 'D' : [1,2], ...}
@@ -37,27 +38,39 @@ class PlotSampler(PointSampler):
     your own class that inherits from PlotSampler.
     """
     def __init__(self, plot_domain, n_points=None, density=None, device='cpu',
-                 dic_for_other_variables={}):
+                 data_for_other_variables={}):
         assert not isinstance(plot_domain, BoundaryDomain), \
-            "Plotting for boundarys not implemented"""
+            "Plotting for boundaries is not implemented"""
         super().__init__(n_points=n_points, density=density)
-        self.dic_for_other_variables = dic_for_other_variables
         self.device = device
-        self._evaluate_domain(plot_domain)
+        self.set_data_for_other_variables(data_for_other_variables)
+        self.domain = plot_domain(**self.data_for_other_variables.coordinates)
         self.sampler = self.construct_sampler()
 
-    def _evaluate_domain(self, plot_domain):
-        tensor_variable_dict = self._transform_input_dict_to_tensor_dict()
-        self.domain = plot_domain(**tensor_variable_dict)
+    def set_data_for_other_variables(self, data_for_other_variables):
+        if isinstance(data_for_other_variables, Points):
+            self.data_for_other_variables = data_for_other_variables
+        elif len(data_for_other_variables) == 0:
+            self.data_for_other_variables = Points.empty()
+        else:
+            torch_data = self.transform_data_to_torch(data_for_other_variables)
+            self.data_for_other_variables = \
+                Points.from_coordinates(torch_data)
 
-    def _transform_input_dict_to_tensor_dict(self):
-        tranformed_dict = {}
-        for vname, value in self.dic_for_other_variables.items():
-            if not isinstance(value, torch.Tensor):
-                tranformed_dict[vname] = torch.tensor(value)
+    def transform_data_to_torch(self, data_for_other_variables):
+        torch_data = {}
+        for vname, data in data_for_other_variables.items():
+            # transform data to torch
+            if not isinstance(data, torch.Tensor):
+                data = torch.tensor(data)
+            # check correct shape of data
+            if len(data.shape) == 0:
+                torch_data[vname] = data.reshape(-1, 1)
+            elif len(data.shape) == 1:
+                torch_data[vname] = data.reshape(-1, len(data))
             else:
-                tranformed_dict[vname] = value
-        return tranformed_dict
+                torch_data[vname] = data
+        return torch_data
 
     def construct_sampler(self):
         if self.n_points:
@@ -93,29 +106,93 @@ class PlotSampler(PointSampler):
 
     def sample_points(self):
         plot_points = self.sampler.sample_points()
-        num_of_points = self._extract_tensor_len_from_dict(plot_points)
-        self.set_length(num_of_points)
+        self.set_length(len(plot_points))
+        other_data = torch.repeat_interleave(self.data_for_other_variables, 
+                                             len(self), dim=0)
+        plot_points = plot_points.join(other_data)
         self._set_device_and_grad_true(plot_points)
-        self._add_other_variables(plot_points)
         return plot_points
 
-    def _set_device_and_grad_true(self, plot_dict):
-        for vname in plot_dict:
-            plot_dict[vname].requires_grad = True
-            plot_dict[vname].to(self.device)
+    def _set_device_and_grad_true(self, plot_points):
+        plot_points._t.requires_grad = True
+        plot_points._t.to(self.device)
 
-    def _add_other_variables(self, plot_dict):
-        for vname in self.dic_for_other_variables:
-            data = self.dic_for_other_variables[vname]
-            if isinstance(data, numbers.Number):
-                plot_dict[vname] = float(data) * torch.ones((len(self), 1),
-                                                            device=self.device)
-            elif isinstance(data, (list, np.ndarray, torch.Tensor)):
-                data_length = len(data)
-                array = data * np.ones((len(self), data_length))
-                plot_dict[vname] = torch.FloatTensor(array, device=self.device) 
-            else:
-                raise TypeError(f"""Values for variables have to be a number, 
-                                     list, array or tensor, but found {type(data)}.""")
-            plot_dict[vname].requires_grad = True
-        return plot_dict
+
+class AnimationSampler(PlotSampler):
+    """A sampler that creates points for an animation.
+
+    Parameters
+    ----------
+    plot_domain : Domain
+        The domain over which the model/function should later be plotted.
+        Will create points inside and at the boundary of the domain.
+    animation_domain : Interval
+        The variable over which the animation should be created, e.g a 
+        time-interval.
+    frame_number : int
+        The number of frames that should be used for the animation. This
+        equals the number of points that will be created in the 
+        animation_domain.
+    n_points : int, optional
+        The number of points that should be used for the plot domain.
+    density : float, optional
+        The desiered density of the created points, in the plot domain.
+    device : str or torch device, optional
+        The device of the model/function.
+    dic_for_other_variables : dict, optional
+        Since the animation will only evaluate the model at specific points, 
+        the values for all other variables are needed. 
+        E.g. {'D' : [1,2], ...}
+    """
+    def __init__(self, plot_domain, animation_domain, frame_number, 
+                 n_points=None, density=None, device='cpu',
+                 dic_for_other_variables={}):
+        super().__init__(plot_domain=plot_domain, n_points=n_points,
+                         density=density, device=device,
+                         dic_for_other_variables=dic_for_other_variables)
+        self._check_correct_types(animation_domain)
+        self.frame_number = frame_number
+        self.animation_domain = self._evaluate_domain(animation_domain)
+        self.animatoin_sampler = \
+            self._construct_sampler_for_Interval(self.animation_domain, n=frame_number)
+
+    def _check_correct_types(self, animation_domain):
+        assert isinstance(animation_domain, Interval), \
+            "The animation domain has to be a interval"
+
+    @property
+    def plot_domain_constant(self):
+        dependent = any(vname in self.domain.necessary_variables \
+                        for vname in self.animation_domain.space)
+        return not dependent
+
+    @property
+    def animation_key(self):
+        ani_key = list(self.animation_domain.space.keys())[0]
+        return ani_key 
+
+    def sample_animation_points(self):
+        ani_points = self.animatoin_sampler.sample_points()
+        num_of_points = self._extract_tensor_len_from_dict(ani_points)
+        self.frame_number = num_of_points
+        self._set_device_and_grad_true(ani_points)
+        return ani_points
+
+    def sample_plot_domain_points(self, animation_points):
+        if self.plot_domain_constant:
+            plot_points = self.sampler.sample_points()
+            num_of_points = self._extract_tensor_len_from_dict(plot_points)
+            self.set_length(num_of_points)
+            self._set_device_and_grad_true(plot_points)
+            return plot_points
+        return self._sample_params_dependent(**animation_points)
+
+    def _sample_params_dependent(self, **params):
+        output_list = []
+        for i in range(self.frame_number):
+            ith_ani_points = self._extract_points_from_dict(i, params)
+            plot_points = self.sampler.sample_points(**ith_ani_points)
+            for vname in self.domain.space:
+                plot_points[vname].to(self.device)
+            output_list.append(plot_points)
+        return output_list
