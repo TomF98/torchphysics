@@ -99,6 +99,9 @@ class PINNCondition(Condition):
     norm : torch.nn.Module
         A torch Module which computes the (scalar) norm of the given residual,
         e.g. torch.nn.MSELoss().
+    parameter : Parameter
+        A Parameter that can be used in the residual_fn and should be learned in
+        parallel, e.g. based on data.
     name : str
         The name of this condition which will be monitored in logging.
     weight : float
@@ -126,6 +129,54 @@ class PINNCondition(Condition):
         return self.norm(self.residual_fn(**y.coordinates,
                                           **x.coordinates,
                                           **self.parameter.coordinates))
+
+
+class DeepRitzCondition(Condition):
+    """
+    A Condition that minimizes the variational problem of a PDE (weak formulation),
+    similar to the idea presented in [1].
+
+    def poisson_residual(u, x):
+        return 0.5*(torch.sum(grad(u)**2), dim=1)
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        The torch module which should solve the differential equation.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the differential equation.
+    integrand : callable
+        A user-defined function that computes the integrand of the weak formulation,
+        e.g. by using utils.differentialoperators
+    parameter : Parameter
+        A Parameter that can be used in the integrand and should be leraned in parallel,
+        e.g. based on data.
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+
+    Notes
+    -----
+    ..  [1] Weinan E and Bing Yu, "The Deep Ritz method: A deep learning-based numerical
+        algorithm for solving variational problems", 2017
+    """
+    def __init__(self, module, sampler, residual_fn, parameter=Parameter.empty(),
+                 name='deepritzcondition', weight=1.0):
+        super().__init__(name=name, weight=weight, track_gradients=True)
+        self.module = module
+        self.parameter = parameter
+        self.sampler = sampler
+        self.residual_fn = UserFunction(residual_fn)
+    
+    def forward(self):
+        x = next(self.sampler)
+        y = self.module(x)
+        return torch.mean(self.residual_fn(**y.coordinates,
+                         **x.coordinates,
+                         **self.parameter.coordinates), dim=0)
+
 
 """
 Old conditions:

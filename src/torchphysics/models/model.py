@@ -55,18 +55,62 @@ class NormalizationLayer(Model):
         return Points(self.normalize(points), self.output_space)
 
 class AdaptiveWeightLayer(Model):
-    def __init__(self):
-        raise NotImplementedError
+    """
+    Adds adaptive weights to the non-reduced loss. The weights are maximized by
+    reversing the gradients, similar to the idea in [1].
+    Should currently only be used with fixed points.
+
+    Parameters
+    ----------
+    space : Space
+        The output space in which the loss lies
+    n : int
+        The amount of sampled points in each batch.
+
+    Notes
+    -----
+    ..  [1] L. McClenny, "Self-Adaptive Physics-Informed Neural Networks using a Soft
+        Attention Mechanism", 2020.
+    """
+    class GradReverse(torch.Function):
+        @staticmethod
+        def forward(ctx, x):
+            return x.view_as(x)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            return grad_output.neg()
+
+    @classmethod
+    def grad_reverse(cls, x):
+        return cls.GradReverse.apply(x)
+
+    def __init__(self, space, n):
+        super().__init__(space, space)
+        self.weight = torch.nn.Parameter(
+            torch.ones(n, space.dim)
+        )
+    
+    def forward(self, points):
+        weight = self.grad_reverse(self.weight)
+        return Points(weight*points, self.output_space)
+
+
 
 class Parallel(Model):
+    """
+    A model that wraps multiple models which should be applied in parallel.
+    """
     def __init__(self, *models):
         input_space = Space({})
         output_space = Space({})
         for model in models:
+            assert input_space.keys().isdisjoint(model.input_space)
+            assert output_space.keys().isdisjoint(model.output_space)
             input_space = input_space * model.input_space
             output_space = output_space * model.output_space
         super().__init__(input_space, output_space)
-        self.models = models
+        self.models = nn.ModuleList(models)
     
     def forward(self, points):
         out = []
@@ -75,6 +119,9 @@ class Parallel(Model):
         return Points(torch.cat((out), dim=0), self.output_space)
 
 class Sequential(Model):
+    """
+    A model that wraps multiple models which should be applied sequentially.
+    """
     def __init__(self, *models):
         super().__init__(models[0].input_space, models[-1].output_space)
         self.sequential = nn.Sequential(*models)
