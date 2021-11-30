@@ -20,15 +20,15 @@ class GridSampler(PointSampler):
         The number of points that should be sampled.
     density : float, optional
         The desiered density of the created points.
-    filter : callable, optional
+    filter_fn : callable, optional
         A function that restricts the possible positions of sample points.
         A point that is allowed should return True, therefore a point that should be 
         removed must return false. The filter has to be able to work with a batch
         of inputs.
         The Sampler will use a rejection sampling to find the right amount of points.
     """
-    def __init__(self, domain, n_points=None, density=None, filter=None):
-        super().__init__(n_points=n_points, density=density, filter=filter)
+    def __init__(self, domain, n_points=None, density=None, filter_fn=None):
+        super().__init__(n_points=n_points, density=density, filter_fn=filter_fn)
         self.domain = domain
 
     def _sample_points(self, params=Points.empty()):
@@ -65,7 +65,7 @@ class GridSampler(PointSampler):
 
     def _sample_grid(self, current_params, sample_function, n):
         new_points = sample_function(n, params=current_params)
-        repeated_params = torch.repeat_interleave(current_params, n, dim=0)
+        repeated_params = self._repeat_params(current_params, n)
         new_points = self._apply_filter(new_points.join(repeated_params))
         return new_points
 
@@ -90,7 +90,7 @@ class GridSampler(PointSampler):
             return new_points
         random_sampler = RandomUniformSampler(domain=self.domain,
                                               n_points=self.n_points)
-        random_sampler.filter = self.filter
+        random_sampler.filter_fn = self.filter_fn
         random_points = random_sampler.sample_points(current_params)
         return new_points | random_points
                             

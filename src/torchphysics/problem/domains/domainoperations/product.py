@@ -1,4 +1,3 @@
-import collections
 import torch
 import warnings
 
@@ -35,7 +34,8 @@ class ProductDomain(Domain):
         # set domain params
         space = self.domain_a.space * self.domain_b.space
         super().__init__(space=space, dim=domain_a.dim + domain_b.dim)
-        
+        # to set a bounding box
+        self.bounds = None
         # necessary variables consist of variables of both domains that are not given in domain_b
         self.necessary_variables \
             = (self.domain_a.necessary_variables - self.domain_b.space.variables) \
@@ -62,20 +62,30 @@ class ProductDomain(Domain):
         else:
             self._is_constant = True
 
-    def __call__(self, point):
+    def __call__(self, **data):
         # evaluate both domains at the given data 
-        domain_a = self.domain_a(point)
-        domain_b = self.domain_b(point)
+        domain_a = self.domain_a(**data)
+        domain_b = self.domain_b(**data)
         # check if the data fixes a variable that would be computed with this domain:
-        a_variables_in_data = self.domain_a.space in point.space
-        b_variables_in_data = self.domain_b.space in point.space
+        a_variables_in_data = all(var in data.keys() for var in self.domain_a.space)
+        b_variables_in_data = all(var in data.keys() for var in self.domain_b.space)
         if a_variables_in_data: # domain_a will be a fixed point
-            domain_a = Point(space=self.domain_a.space,
-                             point=point[:,list(self.domain_a.space.keys())].as_tensor)
+            point_data = self._create_point_data(self.domain_a.space, data)
+            domain_a = Point(space=self.domain_a.space, point=point_data)
         if b_variables_in_data: # domain_b will be a fixed point 
-            domain_b = Point(space=self.domain_b.space,
-                             point=point[:,list(self.domain_b.space.keys())].as_tensor)
+            point_data = self._create_point_data(self.domain_b.space, data)
+            domain_b = Point(space=self.domain_a.space, point=point_data)
         return ProductDomain(domain_a=domain_a, domain_b=domain_b)
+
+    def _create_point_data(self, space, data):
+        point_data = []
+        for vname in space.keys():
+            vname_data = data[vname]
+            if isinstance(vname_data, (list, tuple, torch.Tensor)):
+                point_data.extend(data)
+            else: # number
+                point_data.append(data)
+        return point_data
 
     @property
     def boundary(self):
@@ -90,14 +100,41 @@ class ProductDomain(Domain):
         in_b = self.domain_b._contains(points, params)
         return torch.logical_and(in_a, in_b)
 
+    def set_bounding_box(self, bounds):
+        """To set the bounds of the domain. 
+
+        Parameters
+        ----------
+        bounds : list
+            The bounding box of the domain. Whereby the lenght of the list
+            has to be two times the domain dimension. And the bounds need to be in the 
+            following order: [min_axis_1, max_axis_1, min_axis_2, max_axis_2, ...]
+        """
+        assert len(bounds) == 2 * self.dim, """Bounds dont fit the dimension."""
+        self.bounds = bounds
+
     def bounding_box(self, params=Points.empty()):
-        bounds_a = self.domain_a.bounding_box(params)
-        bounds_b = self.domain_b.bounding_box(params)
-        bounds_a.extend(bounds_b)
+        if self.bounds:
+            return self.bounds
+        elif self._is_constant or self.domain_b.space in params.space:
+            # if the domain is constant or additional data for domain a is given
+            # we just can create the bounds directly. 
+            bounds_a = self.domain_a.bounding_box(params)
+            bounds_b = self.domain_b.bounding_box(params)
+            bounds_a.extend(bounds_b)
+        else: # we have to sample some points in b, and approx the bounds.
+            warnings.warn(f"""The bounding box of the ProductDomain dependens of the
+                              values of domain_b. Therefor will sample
+                              {N_APPROX_VOLUME} in domain_b, to compute a 
+                              approixmation. If the bounds a known exactly, set 
+                              them with .set_bounds().""")
+            bounds_b = self.domain_b.bounding_box(params)
+            b_points = self.domain_b.sample_random_uniform(n=N_APPROX_VOLUME,
+                                                           params=params)
+            _, new_params = self._repeat_params(n=N_APPROX_VOLUME, params=params)
+            bounds_a = self.domain_a.bounding_box(b_points.join(new_params))
+            bounds_a.extend(bounds_b)
         return bounds_a
-    
-    def set_volume(self, volume):
-        self._volume = self.transform_to_user_functions(volume)
     
     def _get_volume(self, params=Points.empty()):
         if self._is_constant:
@@ -111,8 +148,10 @@ class ProductDomain(Domain):
             b_points = self.domain_b.sample_random_uniform(n=n, params=new_params)
             if len(self.domain_b.necessary_variables) > 0:
                 # points need to be sampled in every call to this function
-                return torch.sum(self.domain_a.volume(b_points.join(new_params)).reshape(N_APPROX_VOLUME,-1), dim=0)\
-                    / N_APPROX_VOLUME * self.domain_b.volume(params)
+                volume_a = self.domain_a.volume(b_points.join(new_params))
+                reshape_volume = volume_a.reshape(N_APPROX_VOLUME, -1)
+                mean_volume = torch.sum(reshape_volume, dim=0) / N_APPROX_VOLUME
+                return mean_volume.reshape(-1, 1) * self.domain_b.volume(params)
             elif len(self.necessary_variables) > 0:
                 # we can keep the sampled points and evaluate domain_a in a function
                 b_volume = self.domain_b.volume()
@@ -128,7 +167,7 @@ class ProductDomain(Domain):
                 volume = sum((self.domain_a.volume(b_points))/N_APPROX_VOLUME \
                     * self.domain_b.volume())
                 self.set_volume(volume)
-                return torch.repeat_interleave(volume, self.get_num_of_params(params), dim=0)
+                return torch.repeat_interleave(volume, max(1, len(params)), dim=0)
             
 
     def sample_grid(self, n=None, d=None, params=Points.empty()):
@@ -143,11 +182,10 @@ class ProductDomain(Domain):
         if list(volumes.shape) == [1]:
             return n_in, b_points, params
         filter_ = torch.max(volumes)*torch.rand_like(volumes) < volumes
-        for var in b_points:
-            b_points[var] = b_points[var][filter_,:]
-        for var in params:
-            params[var] = params[var][filter_,:]
-        n_out = list(b_points.values())[0].shape[0]
+        b_points = b_points[filter_, ]
+        if not params.isempty:
+            params = params[filter_, ]
+        n_out = len(b_points)
         return n_out, b_points, params
 
     def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
@@ -156,23 +194,20 @@ class ProductDomain(Domain):
                 n_, new_params = self._repeat_params(n, params)
                 b_points = self.domain_b.sample_random_uniform(n=n_, params=new_params)
             else:  # use ratio of uniforms to get uniform values in product domain
-                n_points, b_points, new_params = self._sample_uniform_b_points(n, params=params)
+                n_points, b_points, new_params = \
+                    self._sample_uniform_b_points(n, params=params)
                 n_sampled = n
                 while n_points != n:
                     if n_points < n:
                         n_guess = int((n/n_points-1)*n_sampled)+1
-                        n_out, add_b_points, add_params = self._sample_uniform_b_points(n_guess,
-                                                                                        params=params)
-                        for var in b_points:
-                            b_points[var] = torch.cat((b_points[var], add_b_points[var]), dim=0)
-                        for var in params:
-                            new_params[var] = torch.cat((new_params[var], add_params[var]), dim=0)
+                        n_out, add_b_points, add_params = \
+                            self._sample_uniform_b_points(n_guess, params=params)
+                        b_points = b_points | add_b_points
+                        new_params = new_params | add_params
                         n_points += n_out
                     else:
-                        for var in b_points:
-                            b_points[var] = b_points[var][:n]
-                        for var in params:
-                            new_params[var] = new_params[var][:n]
+                        b_points = b_points[:n, ]
+                        new_params = new_params[:n, ]
                         n_points = n
             a_points = self.domain_a.sample_random_uniform(n=1, params=new_params.join(b_points))
             return a_points.join(b_points)

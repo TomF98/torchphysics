@@ -7,7 +7,7 @@ from ..problem.spaces.points import Points
 
 class UserFunction:
 
-    def __new__(cls, fun):
+    def __new__(cls, fun, defaults={}, args={}):
         if isinstance(fun, cls):
             return fun
         return super(UserFunction, cls).__new__(cls)

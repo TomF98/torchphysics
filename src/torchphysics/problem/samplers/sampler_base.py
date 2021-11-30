@@ -17,21 +17,21 @@ class PointSampler:
         The number of points that should be sampled.
     density : float, optional
         The desiered density of the created points.
-    filter : callable, optional
+    filter_fn : callable, optional
         A function that restricts the possible positions of sample points.
         A point that is allowed should return True, therefore a point that should be 
         removed must return false. The filter has to be able to work with a batch
         of inputs.
         The Sampler will use a rejection sampling to find the right amount of points.
     """
-    def __init__(self, n_points=None, density=None, filter=None):
+    def __init__(self, n_points=None, density=None, filter_fn=None):
         self.n_points = n_points
         self.density = density
         self.length = None
-        if filter:
-            self.filter = UserFunction(filter)
+        if filter_fn:
+            self.filter_fn = UserFunction(filter_fn)
         else:
-            self.filter = None 
+            self.filter_fn = None 
 
     def set_length(self, length):
         """If a density is used, the number of points will not be known before
@@ -71,18 +71,18 @@ class PointSampler:
 
         Parameters
         ----------
-        **params : torchphysics.spaces.Points
+        params : torchphysics.spaces.Points
             Additional parameters for the domain.
 
         Returns
         -------
-        dict:
-            A dictionary containing the created points and, if parameters were 
-            passed as an input, the parameters. Whereby the input parameters maybe 
+        Points:
+            A Points-Object containing the created points and, if parameters were 
+            passed as an input, the parameters. Whereby the input parameters
             will get repeated, so that each row of the tensor corresponds to  
-            valid point in the given domain.
+            valid point in the given (product) domain.
         """
-        if self.filter:
+        if self.filter_fn:
             return self._sample_points_with_filter(params)
         else:
             return self._sample_points(params)
@@ -118,7 +118,7 @@ class PointSampler:
         num_of_points = len(points)
         self.set_length(num_of_points)
         num_of_params = max(1, len(params))
-        repeated_params = torch.repeat_interleave(params, num_of_points, dim=0)
+        repeated_params = self._repeat_params(params, num_of_points)
         repeated_points = points.repeat(num_of_params, 1)
         return repeated_points.join(repeated_params)
 
@@ -138,7 +138,7 @@ class PointSampler:
         ith_params = params[i, ]
         new_points = sample_function(self.n_points, self.density, ith_params)
         num_of_points = len(new_points)
-        repeated_params = torch.repeat_interleave(ith_params, num_of_points, dim=0)
+        repeated_params = self._repeat_params(ith_params, num_of_points)
         return new_points.join(repeated_params)
 
     def _set_sampled_points(self, sample_points, new_points):
@@ -146,8 +146,13 @@ class PointSampler:
             return new_points
         return sample_points | new_points
 
+    def _repeat_params(self, params, n):
+        repeated_params = Points(torch.repeat_interleave(params, n, dim=0),
+                                 params.space)
+        return repeated_params
+
     def _apply_filter(self, sample_points):
-        filter_true = self.filter(sample_points)
+        filter_true = self.filter_fn(sample_points)
         index = torch.where(filter_true)[0]
         return sample_points[index, ]
 

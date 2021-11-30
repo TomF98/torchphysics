@@ -120,7 +120,7 @@ def test_interval_random_sampling_with_n_and_variable_bounds():
     t = Points(torch.tensor([0, 1]).reshape(-1, 1), R1('t'))
     points = I.sample_random_uniform(n=4, params=t)
     assert points.as_tensor.shape == (8, 1)
-    assert all(I._contains(points, torch.repeat_interleave(t, 4, dim=0)))
+    assert all(I._contains(points, Points(torch.repeat_interleave(t, 4, dim=0), R1('t'))))
 
 
 def test_interval_grid_sampling_with_n():
@@ -139,7 +139,7 @@ def test_interval_grid_sampling_with_n_and_variable_bounds():
     t = Points(torch.tensor([0, 1]).reshape(-1, 1), R1('t'))
     points = I.sample_grid(n=4, params=t)
     assert points.as_tensor.shape == (8, 1)
-    assert all(I._contains(points, torch.repeat_interleave(t, 4, dim=0)))
+    assert all(I._contains(points, Points(torch.repeat_interleave(t, 4, dim=0), R1('t'))))
 
 
 def test_get_Intervalboundary():
@@ -214,7 +214,7 @@ def test_interval_boundary_random_sampling_with_n_and_variable_bounds():
     time = Points(torch.tensor([0.0, 1.0, 2]).reshape(-1, 1), R1('t'))
     points = I.sample_random_uniform(n=2, params=time)
     assert points.as_tensor.shape == (6, 1)
-    assert all(I._contains(points, torch.repeat_interleave(time, 2, dim=0)))
+    assert all(I._contains(points, Points(torch.repeat_interleave(time, 2, dim=0), R1('t'))))
 
 
 def test_interval_boundary_grid_with_n_and_variable_bounds():
@@ -222,7 +222,7 @@ def test_interval_boundary_grid_with_n_and_variable_bounds():
     time = Points(torch.tensor([0.0, 1.0]).reshape(-1, 1), R1('t'))
     points = I.sample_grid(n=4, params=time)
     assert points.as_tensor.shape == (8, 1)
-    assert all(I._contains(points, torch.repeat_interleave(time, 4, dim=0)))
+    assert all(I._contains(points, Points(torch.repeat_interleave(time, 4, dim=0), R1('t'))))
 
 
 def test_interval_normals():

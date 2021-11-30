@@ -6,7 +6,16 @@ from ..spaces.points import Points
 
 
 class Domain:
+    """The parent class for all build in domains.
 
+    Parameters
+    ----------
+    space : torchphysiscs.spaces.Space
+        The space in which this object lays.
+    dim : int, optional
+        The dimension of this domain.
+        (if not specified, implicit given through the space)
+    """
     def __init__(self, space, dim=None):
         self.space = space
         if dim is None:
@@ -24,6 +33,14 @@ class Domain:
         assert not any(var in self.necessary_variables for var in self.space)
 
     def transform_to_user_functions(self, *domain_params):
+        """Transforms all parameters that define a given domain to 
+        a UserFunction. This enables that the domain can dependt on other variables.
+
+        Parameters
+        ----------
+        *domain_params: callables, lists, arrays, tensors or numbers
+            The parameters that define a domain.
+        """
         out = []
         for d_param in domain_params:
             if not isinstance(d_param, UserFunction):
@@ -35,11 +52,29 @@ class Domain:
     def boundary(self):
         """
         The boundary domain. Is not implemented for some domains, as for
-        example boundarys of other domains.
+        example boundaries of other boundaries.
+
+        Returns
+        -------
+        boundary: torchphysics.domains.Boundarydomain
+            The boundary-object of the domain.
         """
         raise NotImplementedError
 
     def set_volume(self, volume):
+        """Set the volume of the given domain.
+        
+        volume: callable, number
+            The volume of the domain. Can be a fucntion, if the domain is 
+            dependent on other variables.
+
+        Notes
+        -----
+        For all basic domains the volume (and surface) are implemented. 
+        But if the given domain has a complex shape or is 
+        dependent on other variables, the volume can only be approixmated.
+        Therefore one can set here a exact expression for the volume, if known. 
+        """
         self._user_volume = UserFunction(volume)
 
     @abc.abstractmethod
@@ -47,10 +82,25 @@ class Domain:
         raise NotImplementedError
 
     def volume(self, params=Points.empty()):
+        """Computed the volume of the current domain.
+
+        Parameters
+        ----------
+        params : torchphysics.problem.Points, optional
+            Additional paramters that are needed to evaluate the domain.
+
+        Returns
+        -------
+        volume: torch.tensor
+            Returns the volume of the domain. If dependent on other parameters
+            the value will be returned as tensor with the shape (len(params), 1).
+            Where each row corresponds to the domain to the given values in the
+            params row. 
+        """
         if self._user_volume is None:
             return self._get_volume(params)
         else:
-            return self._user_volume()
+            return self._user_volume(params)
 
     def __add__(self, other):
         """Creates the union of the two input domains.
@@ -151,7 +201,9 @@ class Domain:
         d : float
             optional, The density of points that should be created, if
             n is not defined.
-        
+        params : torchphysics.problem.Points, optional
+            Additional paramters that are maybe needed to evaluate the domain.
+
         Returns
         -------
         Points :
@@ -170,7 +222,9 @@ class Domain:
         d : float
             optional, The density of points that should be created, if
             n is not defined.
-        
+        params : torchphysics.problem.Points, optional
+            Additional paramters that are maybe needed to evaluate the domain.
+
         Returns
         -------
         Points :
@@ -179,6 +233,8 @@ class Domain:
         raise NotImplementedError
 
     def __call__(self, **data):
+        """Evaluates the domain a the given data.
+        """
         raise NotImplementedError
 
     def len_of_params(self, params):
@@ -204,7 +260,13 @@ class Domain:
 
 
 class BoundaryDomain(Domain):
-    
+    """The parent class for all build in boundaries.
+
+    Parameters
+    ----------
+    domain : Domain
+        The domain of which this object is the boundary of.
+    """  
     def __init__(self, domain):
         assert isinstance(domain, Domain)
         super().__init__(space=domain.space, dim=domain.dim-1)
@@ -224,15 +286,17 @@ class BoundaryDomain(Domain):
 
         Parameters
         ----------
-        points : list or array
+        points : torchphysics.problem.Points
             A list of diffrent or a single point for which the normal vector 
             should be computed. The points must lay on the boundary of the domain.
-            E.g in 2D: points = [[2, 4], [9, 6], ....]        
+            E.g in 2D: points = Points(torch.tensor([[2, 4], [9, 6], ....]), R2(...))        
+        params : torchphysics.problem.Points, optional
+            Additional paramters that are maybe needed to evaluate the domain.
 
         Returns
         -------
-        array
-            The array is of the shape (len(points), self.dim) and contains the 
+        torch.tensor
+            The tensor is of the shape (len(points), self.dim) and contains the 
             normal vector at each entry from points.
         """
         pass

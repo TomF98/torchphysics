@@ -26,15 +26,15 @@ class RandomUniformSampler(PointSampler):
         of inputs.
         The Sampler will use a rejection sampling to find the right amount of points.
     """
-    def __init__(self, domain, n_points=None, density=None, filter=None):
-        super().__init__(n_points=n_points, density=density, filter=filter)
+    def __init__(self, domain, n_points=None, density=None, filter_fn=None):
+        super().__init__(n_points=n_points, density=density, filter_fn=filter_fn)
         self.domain = domain
 
     def _sample_points(self, params=Points.empty()):
         if self.n_points:
             rand_points = self.domain.sample_random_uniform(self.n_points,
                                                             params=params)
-            repeated_params = torch.repeat_interleave(params, len(self), dim=0)
+            repeated_params = self._repeat_params(params, len(self))
             return rand_points.join(repeated_params)
         else: # density is used
             sample_function = self.domain.sample_random_uniform
@@ -119,7 +119,7 @@ class GaussianSampler(PointSampler):
             current_num_of_points = 0
             new_sample_points = None
             ith_params = params[i, ]
-            repeat_params = torch.repeat_interleave(ith_params, len(self), dim=0)
+            repeat_params = self._repeat_params(ith_params, len(self))
             while current_num_of_points < self.n_points:
                 new_points = torch_dis.sample((self.n_points,))
                 new_points = Points(new_points, self.domain.space)
@@ -190,7 +190,7 @@ class LHSSampler(PointSampler):
 
     def _check_lhs_inside(self, lhs_points, ith_params):
         new_points = Points(lhs_points, self.domain.space)
-        repeat_params = torch.repeat_interleave(ith_params, len(new_points), dim=0)
+        repeat_params = self._repeat_params(ith_params, len(new_points))
         new_points = new_points.join(repeat_params)
         inside = self.domain._contains(new_points)
         index = torch.where(inside)[0]

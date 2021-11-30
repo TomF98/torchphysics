@@ -5,7 +5,15 @@ from ..domain import Domain, BoundaryDomain
 from ...spaces import Points
 
 class CutDomain(Domain):
+    """Implements the logical cut of two domains.
 
+    Parameters
+    ----------
+    domain_a : Domain
+        The first domain.
+    domain_b : Domain
+        The second domain. 
+    """
     def __init__(self, domain_a: Domain, domain_b: Domain, contained=False):
         assert domain_a.space == domain_b.space
         self.domain_a = domain_a
@@ -20,55 +28,50 @@ class CutDomain(Domain):
         domain_b = self.domain_b(**data)
         return CutDomain(domain_a, domain_b)
 
-    def _contains(self, points, **params):
-        in_a = self.domain_a._contains(points, **params)
-        in_b = self.domain_b._contains(points, **params)
+    def _contains(self, points, params=Points.empty()):
+        in_a = self.domain_a._contains(points, params)
+        in_b = self.domain_b._contains(points, params)
         return torch.logical_and(in_a, torch.logical_not(in_b))
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         if not self.contained:
             warnings.warn("""Exact volume of this cut is not known, will use the
                              estimate: volume = domain_a.volume.
-                             If you need exact volume or sampling, use domain.set_volume().""")
-            return self.domain_a.volume(**params)
-        volume_a = self.domain_a.volume(**params)
-        volume_b = self.domain_b.volume(**params)
+                             If you need the exact volume for sampling,
+                             use domain.set_volume()""")
+            return self.domain_a.volume(params)
+        volume_a = self.domain_a.volume(params)
+        volume_b = self.domain_b.volume(params)
         return volume_a - volume_b
 
-    def bounding_box(self, **params):
-        return self.domain_a.bounding_box(**params)
+    def bounding_box(self, params=Points.empty()):
+        return self.domain_a.bounding_box(params)
 
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_random_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_random_with_d(d, params)
 
-    def _sample_random_with_d(self, d, **params):
-        points_a = self.domain_a.sample_random_uniform(d=d, **params)
-        points = self._cut_points(points_a, **params)
-        return points
+    def _sample_random_with_d(self, d, params=Points.empty()):
+        points_a = self.domain_a.sample_random_uniform(d=d, params=params)
+        return self._cut_points(points_a, params)
 
-    def _cut_points(self, points_a, **params):
+    def _cut_points(self, points_a, params=Points.empty()):
         # check which points are in domain b
-        n = self.get_num_of_params(**points_a)
-        _, repeated_params = self._repeat_params(n, **params)
-        in_b = self.domain_b._contains(points=points_a, **repeated_params)    
+        n = len(points_a)
+        _, repeated_params = self._repeat_params(n, params)
+        in_b = self.domain_b._contains(points=points_a, params=repeated_params)    
         index = torch.where(torch.logical_not(in_b))[0]
-        return self.space.as_tensor(points_a)[index]
+        return points_a[index, ]
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_grid_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_grid_with_d(d, params)
 
-    def _sample_grid_with_d(self, d, **params):
-        points_a = self.domain_a.sample_grid(d=d, **params)
-        points = self._cut_points(points_a, **params)
-        return points
+    def _sample_grid_with_d(self, d, params=Points.empty()):
+        points_a = self.domain_a.sample_grid(d=d, params=params)
+        return self._cut_points(points_a, params)
 
     @property
     def boundary(self):
@@ -82,67 +85,65 @@ class CutBoundaryDomain(BoundaryDomain):
         assert not isinstance(domain.domain_b, BoundaryDomain)
         super().__init__(domain)
 
-    def _contains(self, points, **params):
-        in_a = self.domain.domain_a._contains(points, **params)
-        in_b = self.domain.domain_b._contains(points, **params)
-        on_a_bound = self.domain.domain_a.boundary._contains(points, **params)
-        on_b_bound = self.domain.domain_b.boundary._contains(points, **params)
+    def _contains(self, points, params=Points.empty()):
+        in_a = self.domain.domain_a._contains(points, params)
+        in_b = self.domain.domain_b._contains(points, params)
+        on_a_bound = self.domain.domain_a.boundary._contains(points, params)
+        on_b_bound = self.domain.domain_b.boundary._contains(points, params)
         on_a_part = torch.logical_and(on_a_bound, torch.logical_not(in_b))
         on_b_part = torch.logical_and(on_b_bound, in_a)
         on_b_part = torch.logical_and(on_b_part, torch.logical_not(on_a_bound))
         return torch.logical_or(on_a_part, on_b_part)
 
-    def _get_volume(self, **params):
+    def _get_volume(self, params=Points.empty()):
         if not self.domain.contained:
             warnings.warn("""Exact volume of this domain boundary is not known, 
                              will use the estimate: 
                              volume = domain_a.volume + domain_b.volume.
-                             If you need exact volume or sampling, use domain.set_volume().""")
-        volume_a = self.domain.domain_a.boundary.volume(**params)
-        volume_b = self.domain.domain_b.boundary.volume(**params)
+                             If you need the exact volume for sampling,
+                             use domain.set_volume().""")
+        volume_a = self.domain.domain_a.boundary.volume(params)
+        volume_b = self.domain.domain_b.boundary.volume(params)
         return volume_a + volume_b
     
-    def sample_random_uniform(self, n=None, d=None, **params):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_random_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_random_with_d(d, params)
 
-    def _sample_random_with_d(self, d, **params):
-        points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d, **params)
-        points_a = self.domain._cut_points(points_a, **params)
-        points_b = self.domain.domain_b.boundary.sample_random_uniform(d=d, **params)  
-        points_b = self._delete_outer_points(points_b, self.domain.domain_a, **params)     
-        return torch.cat((points_a, points_b), dim=0)     
+    def _sample_random_with_d(self, d, params=Points.empty()):
+        points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d, 
+                                                                       params=params)
+        points_a = self.domain._cut_points(points_a, params)
+        points_b = self.domain.domain_b.boundary.sample_random_uniform(d=d,
+                                                                       params=params)  
+        points_b = self._delete_outer_points(points_b, self.domain.domain_a, params)     
+        return points_a | points_b
 
-    def _delete_outer_points(self, points, domain, **params):
-        n = self.get_num_of_params(**points)
-        _, repeated_params = self._repeat_params(n, **params)
-        inside = domain._contains(points, **repeated_params)
-        on_bound = domain.boundary._contains(points, **repeated_params)
+    def _delete_outer_points(self, points, domain, params=Points.empty()):
+        n = len(points)
+        _, repeated_params = self._repeat_params(n, params)
+        inside = domain._contains(points, repeated_params)
+        on_bound = domain.boundary._contains(points, repeated_params)
         inside = torch.logical_and(inside, torch.logical_not(on_bound))
-        points = self.space.as_tensor(points)
         index = torch.where(inside)[0]
-        return points[index]
+        return points[index, ]
 
-    def sample_grid(self, n=None, d=None, **params):
+    def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
             raise NotImplementedError
-        else:
-            points = self._sample_grid_with_d(d, **params)
-        return Points(points, self.space)
+        return self._sample_grid_with_d(d, params)
 
-    def _sample_grid_with_d(self, d, **params):
-        points_a = self.domain.domain_a.boundary.sample_grid(d=d, **params)
-        points_a = self.domain._cut_points(points_a, **params)
-        points_b = self.domain.domain_b.boundary.sample_grid(d=d, **params)  
-        points_b = self._delete_outer_points(points_b, self.domain.domain_a, **params)     
-        return torch.cat((points_a, points_b), dim=0)    
+    def _sample_grid_with_d(self, d, params=Points.empty()):
+        points_a = self.domain.domain_a.boundary.sample_grid(d=d, params=params)
+        points_a = self.domain._cut_points(points_a, params)
+        points_b = self.domain.domain_b.boundary.sample_grid(d=d, params=params)  
+        points_b = self._delete_outer_points(points_b, self.domain.domain_a, params)     
+        return points_a | points_b  
 
-    def normal(self, points, **params):
-        a_normals = self.domain.domain_a.boundary.normal(points, **params)
-        b_normals = self.domain.domain_b.boundary.normal(points, **params)
-        on_a = self.domain.domain_a.boundary._contains(points, **params)
+    def normal(self, points, params=Points.empty()):
+        a_normals = self.domain.domain_a.boundary.normal(points, params)
+        b_normals = self.domain.domain_b.boundary.normal(points, params)
+        on_a = self.domain.domain_a.boundary._contains(points, params)
         normals = torch.where(on_a, a_normals, -b_normals)
         return normals
