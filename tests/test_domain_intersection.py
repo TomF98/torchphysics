@@ -120,7 +120,7 @@ def test_sample_random_uniform_in_intersection_with_d():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-1, 0], [0.5, 0], [-1, 1])
     P = P1 & P2
-    points = P.sample_random_uniform(d=0.2)
+    points = P.sample_random_uniform(d=12)
     assert torch.all(points.as_tensor[:, 0] <= 0.5)
     assert torch.all(points.as_tensor[:, 0] >= 0.0)
 
@@ -129,7 +129,7 @@ def test_sample_random_uniform_in_intersection_with_d_in_1D():
     I1 = Interval(R1('x'), 0, 1)
     I2 = Interval(R1('x'), 0.5, 1)
     I = I1 & I2
-    points = I.sample_random_uniform(d=0.02)
+    points = I.sample_random_uniform(d=102)
     assert torch.all(points.as_tensor >= 0.5)
     assert torch.all(I1._contains(points))
 
@@ -146,7 +146,7 @@ def test_sample_grid_in_intersection_with_d():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [0, 0], [0.5, 0], [0, 1])
     P = P1 & P2
-    points = P.sample_grid(d=0.2)
+    points = P.sample_grid(d=12)
     assert torch.all(points.as_tensor[:, 0] <= 0.5)
     assert torch.all(points.as_tensor[:, 0] >= 0.0)
 
@@ -155,7 +155,7 @@ def test_sample_grid_in_intersection_with_d_in_1D():
     I1 = Interval(R1('x'), 0, 1)
     I2 = Interval(R1('x'), 0.3, 2)
     I = I1 & I2
-    points = I.sample_grid(d=0.02)
+    points = I.sample_grid(d=102)
     assert torch.all(points.as_tensor >= 0.3)
     assert torch.all(points.as_tensor <= 1)
     assert torch.all(I1._contains(points))
@@ -265,7 +265,7 @@ def test_sample_random_uniform_in_intersection_boundary_with_d():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [0, 0], [0.5, 0], [0, 1])
     P = P1 & P2
-    points = P.boundary.sample_random_uniform(d=0.2)
+    points = P.boundary.sample_random_uniform(d=12)
     assert torch.all(points.as_tensor[:, 0] <= 0.5)
 
 
@@ -273,7 +273,7 @@ def test_sample_random_uniform_in_intersection_boundary_with_d_in_1D():
     I1 = Interval(R1('x'), 0, 1)
     I2 = Interval(R1('x'), 0.5, 1)
     I = I1 & I2
-    points = I.boundary.sample_random_uniform(d=0.02)
+    points = I.boundary.sample_random_uniform(d=102)
     assert torch.all(points.as_tensor >= 0.5)
 
 
@@ -289,7 +289,7 @@ def test_sample_grid_in_intersection_boundary_with_d():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [0, 0], [0.5, 0], [0, 1])
     P = P1 & P2
-    points = P.boundary.sample_grid(d=0.2)
+    points = P.boundary.sample_grid(d=12)
     assert torch.all(points.as_tensor[:, 0] <= 0.5)
     assert torch.all(P.boundary._contains(points))
 
@@ -298,7 +298,7 @@ def test_sample_grid_in_intersection_boundary_with_d_in_1D():
     I1 = Interval(R1('x'), 0, 1)
     I2 = Interval(R1('x'), 0.3, 1)
     I = I1 & I2
-    points = I.boundary.sample_grid(d=0.02)
+    points = I.boundary.sample_grid(d=102)
     assert torch.all(points.as_tensor >= 0.3)
     assert torch.all(I.boundary._contains(points))
 

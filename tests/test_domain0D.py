@@ -143,7 +143,7 @@ def test_point_random_sampling_with_n():
 
 def test_point_random_sampling_with_d():
     P = Point(R1('x'), 4)
-    points = P.sample_random_uniform(d=0.3).as_tensor
+    points = P.sample_random_uniform(d=13).as_tensor
     assert all(torch.isclose(points, torch.tensor(4.0)))
 
 

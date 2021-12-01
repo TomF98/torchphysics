@@ -105,13 +105,13 @@ def test_interval_random_sampling_with_n():
 
 def test_interval_random_sampling_with_d():
     I = Interval(R1('x'), 0, 1)
-    points = I.sample_random_uniform(d=0.1)
+    points = I.sample_random_uniform(d=11)
     assert all(I._contains(points))
 
 
 def test_interval_grid_sampling_with_d():
     I = Interval(R1('x'), 0, 1)
-    points = I.sample_grid(d=0.1)
+    points = I.sample_grid(d=11)
     assert all(I._contains(points))
 
 
@@ -188,13 +188,13 @@ def test_interval_boundary_random_sampling_with_n():
 
 def test_interval_boundary_random_sampling_with_d():
     I = Interval(R1('x'), 0, 1).boundary
-    points = I.sample_random_uniform(d=0.3)
+    points = I.sample_random_uniform(d=13)
     assert all(I._contains(points))
 
 
 def test_interval_boundary_grid_sampling_with_d():
     I = Interval(R1('x'), 0, 1).boundary
-    points = I.sample_grid(d=0.3)
+    points = I.sample_grid(d=13)
     assert all(I._contains(points))
 
 
@@ -296,7 +296,7 @@ def test_single_interval_bound_random_sampling_with_n():
 
 def test_single_interval_bound_random_sampling_with_d():
     I = Interval(R1('x'), 0, 4).boundary_left
-    points = I.sample_random_uniform(d=0.1)
+    points = I.sample_random_uniform(d=11)
     assert all(torch.isclose(points.as_tensor, torch.tensor(0.0)))
 
 

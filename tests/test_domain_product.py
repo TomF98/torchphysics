@@ -216,7 +216,7 @@ def test_product_random_uniform_sampling_with_d():
     I = Interval(R1('t'), 0, 2)
     C = Circle(R2('x'), [0, 0], 3)
     P = C * I
-    points = P.sample_random_uniform(d=0.2)
+    points = P.sample_random_uniform(d=12)
     assert torch.all(P._contains(points))
 
 

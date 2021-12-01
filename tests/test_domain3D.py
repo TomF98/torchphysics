@@ -106,7 +106,7 @@ def test_sphere_random_sampling_with_n():
 
 def test_sphere_random_sampling_with_d():
     C = Sphere(R3('x'), [0, 0, 0.0], 5)
-    points = C.sample_random_uniform(d=0.3)
+    points = C.sample_random_uniform(d=13)
     assert all(torch.linalg.norm(points.as_tensor, dim=1) <= 5.0)
 
 
@@ -208,7 +208,7 @@ def test_sphere_boundary_random_sampling_with_n():
 
 def test_sphere_boundary_random_sampling_with_d():
     C = Sphere(R3('x'), [0, 0, 0], 4).boundary
-    points = C.sample_random_uniform(d=0.5)
+    points = C.sample_random_uniform(d=15)
     assert all(torch.isclose(torch.linalg.norm(points.as_tensor, dim=1), torch.tensor(4.0)))
 
 
@@ -229,7 +229,7 @@ def test_sphere_boundary_grid_sampling_with_n():
 
 def test_sphere_boundary_grid_sampling_with_d():
     C = Sphere(R3('x'), [0, 0, 0], 4).boundary
-    points = C.sample_grid(d=0.3)
+    points = C.sample_grid(d=13)
     assert all(torch.isclose(torch.linalg.norm(points.as_tensor, dim=1), torch.tensor(4.0)))
 
 

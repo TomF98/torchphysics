@@ -102,7 +102,7 @@ def test_circle_random_sampling_with_n():
 
 def test_circle_random_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4)
-    points = C.sample_random_uniform(d=0.3)
+    points = C.sample_random_uniform(d=13)
     assert all(torch.linalg.norm(points.as_tensor, dim=1) <= 4.0)
 
 
@@ -187,7 +187,7 @@ def test_circle_boundary_random_sampling_with_n():
 
 def test_circle_boundary_random_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4).boundary
-    points = C.sample_random_uniform(d=0.5)
+    points = C.sample_random_uniform(d=15)
     assert all(torch.isclose(torch.linalg.norm(points.as_tensor, dim=1), torch.tensor(4.0)))
 
 
@@ -209,7 +209,7 @@ def test_circle_boundary_grid_sampling_with_n():
 
 def test_circle_boundary_grid_sampling_with_d():
     C = Circle(R2('x'), [0, 0], 4).boundary
-    points = C.sample_grid(d=0.3)
+    points = C.sample_grid(d=13)
     assert all(torch.isclose(torch.linalg.norm(points.as_tensor, dim=1),
                              torch.tensor(4.0)))
 
@@ -363,7 +363,7 @@ def test_parallelogram_random_sampling_with_n():
 
 def test_parallelogram_random_sampling_with_d():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
-    points = P.sample_random_uniform(d=0.1)
+    points = P.sample_random_uniform(d=11)
     assert all(points.as_tensor[:, :1] <= 2.0)
     assert all(points.as_tensor[:, 1:] <= 1.0)
     assert all(points.as_tensor[:, :1] >= 0.0)
@@ -398,8 +398,7 @@ def test_parallelogram_grid_sampling_with_n():
 
 def test_parallelogram_grid_sampling_with_d():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
-    points = P.sample_grid(d=0.1)
-    assert points.as_tensor.shape == (200, 2)
+    points = P.sample_grid(d=11)
     assert all(points.as_tensor[:, :1] <= 2.0)
     assert all(points.as_tensor[:, 1:] <= 1.0)
     assert all(points.as_tensor[:, :1] >= 0.0)
@@ -511,7 +510,7 @@ def test_parallelogram_boundary_random_sampling_with_n():
 
 def test_parallelogram_boundary_random_sampling_with_d():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
-    points = P.sample_random_uniform(d=0.5)
+    points = P.sample_random_uniform(d=15)
     assert all(P._contains(points))
 
 
@@ -541,7 +540,7 @@ def test_parallelogram_boundary_grid_sampling_with_n():
 
 def test_parallelogram_boundary_grid_sampling_with_d():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
-    points = P.sample_grid(d=0.5)
+    points = P.sample_grid(d=15)
     assert all(P._contains(points))
 
 
@@ -690,7 +689,7 @@ def test_triangle_random_sampling_with_n():
 
 def test_triangle_random_sampling_with_d():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1])
-    points = T.sample_random_uniform(d=0.1)
+    points = T.sample_random_uniform(d=11)
     assert all(points.as_tensor[:, :1] + points.as_tensor[:, 1:] <= 1.0)
     assert all(points.as_tensor[:, :1] >= 0.0)
     assert all(points.as_tensor[:, 1:] >= 0.0)
@@ -723,7 +722,7 @@ def test_triangle_grid_sampling_with_n():
 
 def test_triangle_grid_sampling_with_d():
     T = Triangle(R2('x'), [0, 0], [1, 0], [0, 1])
-    points = T.sample_grid(d=0.1)
+    points = T.sample_grid(d=11)
     assert all(points.as_tensor[:, :1] + points.as_tensor[:, 1:] <= 1.0)
     assert all(points.as_tensor[:, :1] >= 0.0)
     assert all(points.as_tensor[:, 1:] >= 0.0)
@@ -840,7 +839,7 @@ def test_triangle_boundary_random_sampling_with_n():
 
 def test_triangle_boundary_random_sampling_with_d():
     T = Triangle(R2('x'), [0, 0], [2, -1], [1, 1]).boundary
-    points = T.sample_random_uniform(d=0.6)
+    points = T.sample_random_uniform(d=16)
     assert all(T._contains(points))
 
 
@@ -870,7 +869,7 @@ def test_triangle_boundary_grid_sampling_with_n():
 
 def test_triangle_boundary_grid_sampling_with_d():
     T = Triangle(R2('x'), [0, 0], [2, 0], [0, 1]).boundary
-    points = T.sample_grid(d=0.5)
+    points = T.sample_grid(d=15)
     assert all(T._contains(points))
 
 
