@@ -72,7 +72,7 @@ class AdaptiveWeightLayer(Model):
     ..  [1] L. McClenny, "Self-Adaptive Physics-Informed Neural Networks using a Soft
         Attention Mechanism", 2020.
     """
-    class GradReverse(torch.Function):
+    class GradReverse(torch.autograd.Function):
         @staticmethod
         def forward(ctx, x):
             return x.view_as(x)

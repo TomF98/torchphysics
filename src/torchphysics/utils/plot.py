@@ -9,7 +9,7 @@ import torch
 from matplotlib import cm, colors
 
 from .helper import prepare_user_fun_input
-from ..problem.spaces import Point
+from ..problem.spaces import Points
 
 
 class Plotter():
@@ -347,7 +347,7 @@ def _triangulation_of_domain(domain, domain_points):
     for t in tess.simplices:
         p = points[t]
         middle_point = 1/3.0 * (p[0] + p[1] + p[2])
-        embedded_point = Point(torch.tensor([middle_point]), domain.space)
+        embedded_point = Points(torch.tensor([middle_point]), domain.space)
         if embedded_point in domain:
             tri = np.append(tri, [t], axis=0)
 
