@@ -66,6 +66,20 @@ class PointSampler:
                                 Set the length by using .set_length, if this 
                                 property is needed""")
 
+    def make_static(self):
+        """Transforms a sampler to an StaticSampler. A StaticSampler only creates
+        points the first time .sample_points() is called. Afterwards the points 
+        are saved and will always be returned if .sample_points() is called again.
+        Useful if the same points should be used while training/validation
+        or if it is not practicall to create new points in each iteration
+        (e.g. grid points).
+        """
+        return StaticSampler(self)
+
+    @property
+    def is_static(self):
+        return isinstance(self, StaticSampler)
+
     def sample_points(self, params=Points.empty()):
         """The methode that creates the points.
 
@@ -224,6 +238,7 @@ class ConcatSampler(PointSampler):
 
 class AppendSampler(PointSampler):
     """A sampler that appends the output of two samplers behind each other.
+    Essentially calling torch.coloumn_stack for the data points.
 
     Parameters
     ----------
@@ -246,3 +261,39 @@ class AppendSampler(PointSampler):
         samples_b = self.sampler_b.sample_points(params)
         self.set_length(len(samples_a))
         return samples_a.join(samples_b)
+
+
+class StaticSampler(PointSampler):
+    """Constructs a sampler that saves the first points created and 
+    afterwards always returns these points again. Has the advantage
+    that the points only have to be computed once.
+
+    Parameters
+    ----------
+    sampler : Pointsampler
+        The basic sampler that will create the points.  
+    """
+    def __init__(self, sampler):
+        self.length = None
+        self.sampler = sampler
+        self.created_points = None
+
+    def __len__(self):
+        if self.length:
+            return self.length
+        return len(self.sampler)
+
+    def __next__(self):
+        if self.created_points:
+            return self.created_points
+        return self.sample_points()
+
+    def sample_points(self, params=Points.empty()):
+        if self.created_points:
+            return self.created_points
+        points = self.sampler.sample_points(params)
+        self.created_points = points
+        return points
+
+    def make_static(self):
+        return self

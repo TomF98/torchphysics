@@ -1,5 +1,6 @@
 import pytest
 import torch
+from torchphysics.problem.samplers.sampler_base import StaticSampler
 
 from torchphysics.problem.spaces import R2, R1
 from torchphysics.problem.domains import (Circle, Interval, Point, Parallelogram)
@@ -547,3 +548,48 @@ def test_create_data_sampler_with_wrong_data_output():
     input_data = Points(torch.tensor([[0.0], [2.0]]), R1('t'))
     with pytest.raises(TypeError):
         DataSampler(input_data, output_data)
+
+
+# test static sampler
+
+def test_make_sampler_static():
+    ps = RandomUniformSampler(domain=Interval(R1('t'), 0, 2))
+    assert not ps.is_static
+    static_sampler = ps.make_static()
+    assert isinstance(static_sampler, StaticSampler)
+    assert static_sampler.is_static
+
+
+def test_try_make_static_sampler_static_again():
+    ps = RandomUniformSampler(domain=Interval(R1('t'), 0, 2))
+    static_sampler = ps.make_static()
+    assert static_sampler == static_sampler.make_static()
+
+
+def test_get_points_of_static_sampler():
+    ps = RandomUniformSampler(domain=Interval(R1('t'), 0, 2), n_points=50)
+    static_sampler = ps.make_static()
+    points1 = static_sampler.sample_points()
+    points2 = static_sampler.sample_points()
+    assert torch.equal(points1, points2)
+
+
+def test_get_length_of_static_sampler():
+    ps = RandomUniformSampler(domain=Interval(R1('t'), 0, 2), n_points=50)
+    static_sampler = ps.make_static()
+    assert len(static_sampler) == 50
+
+
+def test_set_length_of_static_sampler():
+    ps = RandomUniformSampler(domain=Interval(R1('t'), 0, 2), n_points=50)
+    static_sampler = ps.make_static()
+    static_sampler.set_length(100)
+    assert len(static_sampler) == 100
+
+
+def test_static_sampler_next():
+    ps = RandomUniformSampler(domain=Interval(R1('t'), 0, 2), n_points=50)
+    static_sampler = ps.make_static()
+    points1 = next(static_sampler)
+    points2 = next(static_sampler)
+    assert torch.equal(points1, points2)
