@@ -83,9 +83,11 @@ class PointSampler:
             valid point in the given (product) domain.
         """
         if self.filter_fn:
-            return self._sample_points_with_filter(params)
+            out = self._sample_points_with_filter(params)
         else:
-            return self._sample_points(params)
+            out = self._sample_points(params)
+        out.requires_grad = True
+        return out
 
     @abc.abstractmethod
     def _sample_points_with_filter(self, params=Points.empty()):

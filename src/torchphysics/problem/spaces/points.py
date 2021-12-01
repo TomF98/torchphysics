@@ -212,3 +212,11 @@ class Points():
         assert len(spaces) > 0
         ret = func(*args_list, **kwargs)
         return ret
+    
+    @property
+    def requires_grad(self):
+        return self._t.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value):
+        self._t.requires_grad = value

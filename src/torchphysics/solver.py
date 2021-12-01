@@ -1,4 +1,5 @@
 from typing import Dict
+import warnings
 
 import torch
 import torch.nn as nn
@@ -33,7 +34,13 @@ class Solver(pl.LightningModule):
     def train_dataloader(self):
         # HACK: create an empty trivial dataloader, since real data is loaded
         # in conditions
-        return torch.utils.data.DataLoader(torch.empty(self.trainer.max_steps))
+        steps = self.trainer.max_steps
+        if steps is None:
+            warnings.warn("The maximum amount of iterations should be defined in"
+                "trainer.max_steps. If undefined, the solver will train in epochs"
+                "of 1000 steps.")
+            steps = 1000
+        return torch.utils.data.DataLoader(torch.empty(steps))
     
     def training_step(self, batch, batch_idx):
         loss = torch.zeros(1, device=self.device, requires_grad=True)

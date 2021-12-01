@@ -127,8 +127,8 @@ class PINNCondition(Condition):
         x = next(self.sampler)
         y = self.module(x)  # y is in coords of output space
         return torch.mean(self.residual_fn({**y.coordinates,
-                                                   **x.coordinates,
-                                                   **self.parameter.coordinates})**self.norm,
+                                            **x.coordinates,
+                                            **self.parameter.coordinates})**self.norm,
                           dim=0)**(1/self.norm)
 
 
