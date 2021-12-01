@@ -161,7 +161,9 @@ class UnionBoundaryDomain(BoundaryDomain):
     
     def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError
+            raise NotImplementedError("""Sampling in a Union-Domain with given
+                                         number of points n is not implemented, 
+                                         please use a density.""")
         return self._sample_random_with_d(d, params)
 
     def _sample_random_with_d(self, d, params=Points.empty()):
