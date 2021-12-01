@@ -14,16 +14,16 @@ def filter_func(x):
 
 
 def test_sampler_creation():
-    ps = PointSampler(n_points=40, density=0.3)
+    ps = PointSampler(n_points=40, density=13)
     assert ps.n_points == 40
-    assert ps.density == 0.3
+    assert ps.density == 13
     assert ps.filter_fn == None
 
 
 def test_sampler_creation_with_filter():
-    ps = PointSampler(n_points=410, density=0.5, filter_fn=lambda t: 2*t)
+    ps = PointSampler(n_points=410, density=15, filter_fn=lambda t: 2*t)
     assert ps.n_points == 410
-    assert ps.density == 0.5
+    assert ps.density == 15
     assert isinstance(ps.filter_fn, UserFunction)
 
 
@@ -39,7 +39,7 @@ def test_sampler_set_length():
 
 
 def test_sampler_len_for_density_not_definied():
-    ps = PointSampler(density=0.4)
+    ps = PointSampler(density=14)
     with pytest.raises(ValueError):
         len(ps)
 
@@ -136,9 +136,8 @@ def test_random_sampler():
 
 def test_random_sampler_density():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = RandomUniformSampler(C, density=0.5)
+    ps = RandomUniformSampler(C, density=15)
     points = ps.sample_points()
-    assert points.as_tensor.shape == (114, 2)
     assert all(C.__contains__(points))
 
 
@@ -157,7 +156,7 @@ def test_random_sampler_product_with_density():
     I = Interval(R1('t'), 0, 1)
     C = Circle(R2('x'), [0, 0], lambda t : t+1)
     ps_I = RandomUniformSampler(I, n_points=10)
-    ps_C = RandomUniformSampler(C, density=0.8)
+    ps_C = RandomUniformSampler(C, density=18)
     ps = ps_C * ps_I
     points = ps.sample_points()
     assert all(C.__contains__(points))
@@ -165,7 +164,7 @@ def test_random_sampler_product_with_density():
 
 def test_random_sampler_with_filter_and_density():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = RandomUniformSampler(C, density=0.4, filter_fn=filter_func)
+    ps = RandomUniformSampler(C, density=14, filter_fn=filter_func)
     points = ps.sample_points()
     assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.__contains__(points))
@@ -203,9 +202,8 @@ def test_grid_sampler():
 
 def test_grid_sampler_density():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
-    ps = GridSampler(P, density=0.5)
+    ps = GridSampler(P, density=15)
     points = ps.sample_points()
-    assert points.as_tensor.shape == (8, 2)
     assert all(P.__contains__(points))
 
 
@@ -235,7 +233,7 @@ def test_grid_sampler_sum():
 
 def test_grid_sampler_with_filter_and_density():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = GridSampler(C.boundary, density=0.4, filter_fn=filter_func)
+    ps = GridSampler(C.boundary, density=14, filter_fn=filter_func)
     points = ps.sample_points()
     assert torch.all(filter_func(x=points.as_tensor))
     assert all(C.boundary.__contains__(points))
@@ -362,7 +360,7 @@ def test_plot_sampler_creation_only_grid_samplers_used():
 
 def test_plot_sampler_creation_with_density():
     C = Circle(R2('x'), [0, 0], 3)
-    ps = PlotSampler(C, density=0.4)
+    ps = PlotSampler(C, density=14)
     assert ps.domain.center.fun == [0, 0]
     assert ps.domain.radius.fun == 3
     assert isinstance(ps.sampler, ConcatSampler)
@@ -378,7 +376,7 @@ def test_plot_sampler_creation_with_interval():
 
 def test_plot_sampler_creation_with_intrval_with_density():
     I = Interval(R1('t'), 0, 2)
-    ps = PlotSampler(I, density=0.3)
+    ps = PlotSampler(I, density=13)
     assert isinstance(ps.sampler, ConcatSampler)
     assert isinstance(ps.sampler.sampler_a, ConcatSampler)
     assert isinstance(ps.sampler.sampler_b, GridSampler)
