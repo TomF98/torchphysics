@@ -20,7 +20,7 @@ class Space(Counter, OrderedDict):
         if isinstance(space, Space):
             return (self & space) == space
         else:
-            raise TypeError
+            return False
     
     def __getitem__(self, val):
         if isinstance(val, slice):

@@ -1,3 +1,4 @@
+from typing import Iterable
 import torch
 
 from .space import Space
@@ -115,8 +116,9 @@ class Points():
         This operation does not support slicing single dimensions from a
         variable directly, however, this can be done on the output.
         """
+        if not isinstance(val, Iterable):
+            val = (val,)
         # first axis
-        val = tuple(val)
         if isinstance(val[0], int):
             # keep tensor dimension
             out = self._t[val[0]:val[0]+1,:]
@@ -126,10 +128,13 @@ class Points():
 
         # second axis
         if len(val) == 2:
-            out_space = out_space[val[1]]
             slc = self._variable_slices
             rng = list(range(self.dim))
             out_idxs = []
+            if val[1] in out_space:
+                out_space = Space({val[1]: out_space[val[1]]})
+            else:
+                out_space = out_space[val[1]]
             for var in out_space:
                 out_idxs += rng[slc[var]]
             out = out[:,out_idxs]
