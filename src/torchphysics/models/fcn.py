@@ -26,14 +26,14 @@ class FCN(Model):
 
         layers = []
         layers.append(nn.Linear(self.input_space.dim, hidden[0]))
-        torch.nn.init.xavier_normal_(self.layers[-1].weight, gain=xavier_gains[0])
+        torch.nn.init.xavier_normal_(layers[-1].weight, gain=xavier_gains[0])
         layers.append(activations[0])
         for i in range(len(hidden)-1):
             layers.append(nn.Linear(hidden[i], hidden[i+1]))
-            torch.nn.init.xavier_normal_(self.layers[-1].weight, gain=xavier_gains[i+1])
+            torch.nn.init.xavier_normal_(layers[-1].weight, gain=xavier_gains[i+1])
             layers.append(activations[i+1])
         layers.append(nn.Linear(hidden[-1], self.output_space.dim))
-        torch.nn.init.xavier_normal_(self.layers[-1].weight, gain=1)
+        torch.nn.init.xavier_normal_(layers[-1].weight, gain=1)
 
         self.sequential = nn.Sequential(*layers)
 

@@ -1,21 +1,13 @@
-"""contains classes that wrap a PDE problem and
-the NN model to solve this problem
-
-classes inherit from LightningModules"""
-
-import json
 from typing import Dict
 
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-import warnings
 
-from .utils.plot import _scatter
 
 class OptimizerSetting:
-    def __init__(self, optimizer_class, lr, optimizer_args=None,
-                 scheduler_class=None, scheduler_args=None):
+    def __init__(self, optimizer_class, lr, optimizer_args={},
+                 scheduler_class=None, scheduler_args={}):
         self.optimizer_class = optimizer_class
         self.lr = lr
         self.optimizer_args = optimizer_args
@@ -30,24 +22,30 @@ class Solver(pl.LightningModule):
     """
     def __init__(self,
                  train_conditions,
-                 val_conditions,
-                 optimizer_setting):
+                 val_conditions=(),
+                 optimizer_setting=OptimizerSetting(torch.optim.Adam,
+                                                    1e-3)):
         super().__init__()
         self.train_conditions = nn.ModuleList(train_conditions)
         self.val_conditions = nn.ModuleList(val_conditions)
         self.optimizer_setting = optimizer_setting
     
-    def training_step(self):
+    def train_dataloader(self):
+        # HACK: create an empty trivial dataloader, since real data is loaded
+        # in conditions
+        return torch.utils.data.DataLoader(torch.empty(self.trainer.max_steps))
+    
+    def training_step(self, batch, batch_idx):
         loss = torch.zeros(1, device=self.device, requires_grad=True)
         for condition in self.train_conditions:
             cond_loss = condition.weight * condition()
             self.log(f'train/{condition.name}', cond_loss)
-            loss += cond_loss
+            loss = loss + cond_loss
 
         self.log('train/loss', loss)
         return loss
     
-    def validation_step(self):
+    def validation_step(self, batch, batch_idx):
         loss = torch.zeros(1, device=self.device)
         for condition in self.val_conditions:
             torch.set_grad_enabled(condition.track_gradients is not False)
@@ -58,7 +56,7 @@ class Solver(pl.LightningModule):
         optimizer = self.optimizer_setting.optimizer_class(
             self.parameters(),
             lr = self.optimizer_setting.lr,
-            **self.optimizer_setting.optimizer_params
+            **self.optimizer_setting.optimizer_args
         )
         if self.optimizer_setting.scheduler_class is None:
             return optimizer

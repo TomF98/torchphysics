@@ -3,4 +3,4 @@ approximate the solution of a differential equation"""
 
 from .parameter import Parameter
 from .model import Model, NormalizationLayer
-from .fcn import SimpleFCN
+from .fcn import FCN
