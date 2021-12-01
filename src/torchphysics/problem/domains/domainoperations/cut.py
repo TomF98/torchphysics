@@ -66,7 +66,9 @@ class CutDomain(Domain):
 
     def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError
+            raise NotImplementedError("""Sampling in a Cut-Domain with given number 
+                                         of points n is not implemented, 
+                                         please use a density.""")
         return self._sample_grid_with_d(d, params)
 
     def _sample_grid_with_d(self, d, params=Points.empty()):
@@ -131,7 +133,9 @@ class CutBoundaryDomain(BoundaryDomain):
 
     def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError
+            raise NotImplementedError("""Sampling in a Cut-Domain with given number 
+                                         of points n is not implemented, 
+                                         please use a density.""")
         return self._sample_grid_with_d(d, params)
 
     def _sample_grid_with_d(self, d, params=Points.empty()):
