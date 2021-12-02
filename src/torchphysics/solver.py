@@ -43,8 +43,9 @@ class Solver(pl.LightningModule):
         return torch.utils.data.DataLoader(torch.empty(steps))
     
     def training_step(self, batch, batch_idx):
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        loss = torch.zeros(1, device=self.device, requires_grad=True)
+        if self.device.type != 'cpu':
+            torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        loss = torch.zeros(1, requires_grad=True)
         for condition in self.train_conditions:
             cond_loss = condition.weight * condition()
             self.log(f'train/{condition.name}', cond_loss)
