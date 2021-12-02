@@ -2,11 +2,11 @@ import pytest
 import torch
 import matplotlib.pyplot as pyplot
 
-import torchphysics.utils.plotting.plot as plt  
+import torchphysics.utils.plotting.plot_functions as plt  
 from torchphysics.problem.domains import Interval, Circle, Parallelogram
 from torchphysics.problem.spaces import R2, R1
 from torchphysics.problem.samplers import PlotSampler
-from torchphysics.models.fcn import SimpleFCN
+from torchphysics.models.fcn import FCN
 from torchphysics.problem.spaces.points import Points
 
 
@@ -53,9 +53,7 @@ def test_1D_plot():
     domain = Interval(R1('x'), 0, 1)
     ps = PlotSampler(domain, n_points=200)
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'x':1},
-                      solution_dims={'u':1},
-                      width=5, depth=1)
+    model = FCN(input_space=R1('x'), output_space=R1('u'))
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'x'
@@ -69,9 +67,7 @@ def test_line_plot_with_wrong_function_shape():
     ps = PlotSampler(domain, n_points=200)
     plotter = plt.Plotter(plot_function=wrong_shape, point_sampler=ps, 
                           plot_type='line')
-    model = SimpleFCN(variable_dims={'x':1},
-                      solution_dims={'u':2},
-                      width=5, depth=1)
+    model = FCN(input_space=R1('x'), output_space=R2('u'))
     with pytest.raises(ValueError):
         _ = plotter.plot(model=model)  
 
@@ -80,9 +76,7 @@ def test_1D_plot_with_textbox():
     domain = Interval(R1('x'), 0, 1)
     ps = PlotSampler(domain, n_points=200, data_for_other_variables={'t': 2})
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'x':1, 't': 1},
-                      solution_dims={'u':1},
-                      width=5, depth=1)
+    model = FCN(input_space=R1('x')*R1('t'), output_space=R1('u'))
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'x'
@@ -93,9 +87,7 @@ def test_2D_plot():
     domain = Parallelogram(R1('x')*R1('y'), [0, 0], [1, 0], [0, 2])
     ps = PlotSampler(domain, n_points=200)
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'x':1, 'y':1},
-                      solution_dims={'u':1},
-                      width=5, depth=1)
+    model = FCN(input_space=R1('x')*R1('y'), output_space=R1('u'))
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'x'
@@ -106,12 +98,10 @@ def test_2D_plot():
 
 def test_2D_plot_for_booleandomain():
     domain = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 2])
-    domain -= Circle(R2('x'), [0.5, 0.5], 0.2)
-    ps = PlotSampler(domain, density=0.1)
+    domain -= Circle(R2('x'), [0.5, 0.5], 0.1)
+    ps = PlotSampler(domain, density=10)
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'x':2},
-                      solution_dims={'u':1},
-                      width=5, depth=1)
+    model = FCN(input_space=R2('x'), output_space=R1('u'))
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'x_1'
@@ -150,9 +140,7 @@ def test_2D_quiver():
     P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 2])
     ps = PlotSampler(P, density=0.1)
     plotter = plt.Plotter(plot_function=quiver_plt, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'x':2},
-                      solution_dims={'u':2},
-                      width=5, depth=1)
+    model = FCN(input_space=R2('x'), output_space=R2('u'))
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'x_1'
@@ -167,9 +155,7 @@ def test_2D_quiver_with_textbox():
     P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 2])
     ps = PlotSampler(P, density=0.1, data_for_other_variables={'t': 2.023223})
     plotter = plt.Plotter(plot_function=quiver_plt, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'x':2, 't':1},
-                      solution_dims={'u':2},
-                      width=5, depth=1)
+    model = FCN(input_space=R2('x')*R1('t'), output_space=R2('u'))
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'x_1'
@@ -182,9 +168,7 @@ def test_3D_curve():
     I = Interval(R1('i'), -1, 2)
     ps = PlotSampler(I, density=0.1, data_for_other_variables={'t': 2})
     plotter = plt.Plotter(plot_function=lambda u:u, point_sampler=ps)
-    model = SimpleFCN(variable_dims={'i': 1, 't':1},
-                      solution_dims={'u': 2},
-                      width=5, depth=1)  
+    model = FCN(input_space=R1('i')*R1('t'), output_space=R2('u'))  
     fig = plotter.plot(model=model)  
     assert fig.axes[0].get_xlim() == (-1.15, 2.15)
     assert fig.axes[0].get_xlabel() == 'i'
@@ -193,9 +177,7 @@ def test_3D_curve():
 
 def test_contour_2D():
     P = Parallelogram(R2('R'), [0, 0], [1, 0], [0, 2])
-    model = SimpleFCN(variable_dims={'R': 2},
-                      solution_dims={'u': 2},
-                      width=5, depth=1)    
+    model = FCN(input_space=R2('R'), output_space=R2('u'))    
     ps = PlotSampler(P, n_points=500)
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps,
                           plot_type='contour_surface')
@@ -209,9 +191,7 @@ def test_contour_2D():
 
 def test_contour_2D_with_textbox():
     P = Parallelogram(R2('R'), [0, 0], [1, 0], [0, 2])
-    model = SimpleFCN(variable_dims={'R': 2, 't': 2},
-                      solution_dims={'u': 2},
-                      width=5, depth=1)    
+    model = FCN(input_space=R2('R')*R2('t'), output_space=R2('u'))    
     ps = PlotSampler(P, n_points=500, data_for_other_variables={'t': [2.0, 0.0]})
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps,
                           plot_type='contour_surface')
@@ -230,8 +210,6 @@ def test_contour_plot_with_wrong_function_shape():
     ps = PlotSampler(P, n_points=200)
     plotter = plt.Plotter(plot_function=wrong_shape, point_sampler=ps, 
                           plot_type='contour_surface')
-    model = SimpleFCN(variable_dims={'x':2},
-                      solution_dims={'u':2},
-                      width=5, depth=1)
+    model = FCN(input_space=R2('x'), output_space=R2('u'))
     with pytest.raises(ValueError):
         _ = plotter.plot(model=model)  

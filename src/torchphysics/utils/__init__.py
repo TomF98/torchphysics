@@ -9,3 +9,4 @@ from .differentialoperators import (laplacian,
                                     normal_derivative)
 
 from .user_fun import UserFunction
+from .plotting import plot, Plotter, animate

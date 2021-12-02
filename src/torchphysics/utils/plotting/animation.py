@@ -8,9 +8,8 @@ from matplotlib import animation as anim
 import numpy as np
 import torch
 
-from .plot import (_compute_output_shape, _create_info_text, 
+from .plot_functions import (_compute_output_shape, _create_info_text, 
                    _create_figure_and_axis, _triangulation_of_domain)
-from ...problem.samplers.plot_samplers import AnimationSampler
 from ..helper import prepare_user_fun_input
 
 
@@ -48,8 +47,6 @@ def animate(model, ani_function, ani_sampler, ani_speed=50, angle=[30, 30],
     animation.FuncAnimation
         The function that handles the animation  
     '''    
-    assert isinstance(ani_sampler, AnimationSampler), \
-        """The sampler has to be an AnimationSampler!"""
     animation_points, domain_points, outputs, out_shape = \
         _create_animation_data(model, ani_function, ani_sampler)
     ani_fun = _find_ani_function(ani_sampler, ani_type, out_shape)
