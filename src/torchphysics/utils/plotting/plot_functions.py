@@ -53,12 +53,12 @@ class Plotter():
         self.plot_type = plot_type
 
     def plot(self, model):
-        return _plot(model=model, plot_function=self.plot_function,
-                     point_sampler=self.point_sampler, 
-                     angle=self.angle, plot_type=self.plot_type)
+        return plot(model=model, plot_function=self.plot_function,
+                    point_sampler=self.point_sampler, 
+                    angle=self.angle, plot_type=self.plot_type)
 
 
-def _plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
+def plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
     '''Main function for plotting
 
     Parameters
@@ -110,8 +110,9 @@ def _plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
 def _create_plot_output(model, plot_function, point_sampler):
     # first create the plot points and evaluate the model
     inp_points = point_sampler.sample_points()
-    model_out = model(inp_points)
-    data_dict = {**model_out, **inp_points.coordinates}
+    inp_points_dict = inp_points.coordinates
+    model_out = model(Points.from_coordinates(inp_points_dict))
+    data_dict = {**model_out.coordinates, **inp_points_dict}
     # When model output correct: data_dict = {**model_out.coordinates, **inp_points.coordinates}
     # now evaluate the plot function
     inp = prepare_user_fun_input(plot_function, data_dict)
