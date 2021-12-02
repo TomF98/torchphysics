@@ -111,7 +111,7 @@ def test_random_sampling_inside_poly3D_with_n():
 def test_random_sampling_inside_poly3D_with_d():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.sample_random_uniform(d=0.3)
+    points = poly3D.sample_random_uniform(d=13)
     assert all(poly3D._contains(points)) 
 
 
@@ -136,7 +136,7 @@ def test_grid_sampling_inside_poly3D():
 def test_grid_sampling_inside_poly3D_with_d():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.sample_grid(d=0.3)
+    points = poly3D.sample_grid(d=13)
     assert all(torch.logical_or(poly3D._contains(points),
                                 poly3D.boundary._contains(points)))   
 
@@ -162,7 +162,7 @@ def test_random_sampling_boundary_poly3D():
 def test_random_sampling_boundary_poly3D_with_d():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.boundary.sample_random_uniform(d=0.1)
+    points = poly3D.boundary.sample_random_uniform(d=11)
     assert all(poly3D.boundary._contains(points)) 
 
 
@@ -186,7 +186,7 @@ def test_grid_sampling_boundary_poly3D():
 def test_grid_sampling_boundary_poly3D_with_d():
     vertices, faces = _create_simple_polygon()
     poly3D = TrimeshPolyhedron(R3('x'), vertices=vertices, faces=faces)
-    points = poly3D.boundary.sample_grid(d=0.2)
+    points = poly3D.boundary.sample_grid(d=12)
     assert all(poly3D.boundary._contains(points)) 
 
 

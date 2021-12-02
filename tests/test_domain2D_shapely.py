@@ -185,7 +185,7 @@ def test_grid_sampling_inside_poly2D_no_extra_points():
 
 def test_grid_sampling_inside_poly2D():
     P = ShapelyPolygon(R2('x'), [[0, 10], [0, 0], [10, 2], [10, 8]])
-    points = P.sample_grid(d=0.1)
+    points = P.sample_grid(d=11)
     assert all(P._contains(points))
 
 

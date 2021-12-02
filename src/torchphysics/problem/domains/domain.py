@@ -251,7 +251,7 @@ class Domain:
                                 given pair of parameters. Found {len(volume)} 
                                 different pairs. If sampling with a density is needed, 
                                 a loop should be used.""")
-        n = torch.ceil(volume / d**self.dim)
+        n = torch.ceil(d * volume)
         return int(n)
 
     def _repeat_params(self, n, params):
