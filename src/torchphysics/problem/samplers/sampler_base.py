@@ -100,7 +100,6 @@ class PointSampler:
             out = self._sample_points_with_filter(params)
         else:
             out = self._sample_points(params)
-        out.requires_grad = True
         return out
 
     @abc.abstractmethod

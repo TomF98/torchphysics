@@ -8,6 +8,7 @@ import numpy as np
 
 from ...models import Parameter
 from ...utils import UserFunction
+from ..spaces import Points
 
 """
 TODO: check creation of tensors on correct devices, maybe additional flags
@@ -47,6 +48,12 @@ class Condition(torch.nn.Module):
         torch.Tensor : the loss which should be minimized or monitored during training
         """
         raise NotImplementedError
+
+    def _track_gradients(self, points):
+        points_coordinates = points.coordinates
+        for var in points_coordinates:
+            points_coordinates[var].requires_grad = True
+        return points_coordinates, Points.from_coordinates(points_coordinates)
 
 
 class DataCondition(Condition):
@@ -125,9 +132,10 @@ class PINNCondition(Condition):
     
     def forward(self):
         x = next(self.sampler)
+        x_coordinates, x = self._track_gradients(x)
         y = self.module(x)  # y is in coords of output space
         return torch.mean(self.residual_fn({**y.coordinates,
-                                            **x.coordinates,
+                                            **x_coordinates,
                                             **self.parameter.coordinates})**self.norm,
                           dim=0)**(1/self.norm)
 
@@ -173,9 +181,10 @@ class DeepRitzCondition(Condition):
     
     def forward(self):
         x = next(self.sampler)
+        x_coordinates, x = self._track_gradients(x)
         y = self.module(x)
         return torch.mean(self.residual_fn({**y.coordinates,
-                                            **x.coordinates,
+                                            **x_coordinates,
                                             **self.parameter.coordinates}),
                           dim=0)
 

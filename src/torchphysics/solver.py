@@ -43,6 +43,7 @@ class Solver(pl.LightningModule):
         return torch.utils.data.DataLoader(torch.empty(steps))
     
     def training_step(self, batch, batch_idx):
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
         loss = torch.zeros(1, device=self.device, requires_grad=True)
         for condition in self.train_conditions:
             cond_loss = condition.weight * condition()
@@ -53,6 +54,7 @@ class Solver(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
         loss = torch.zeros(1, device=self.device)
         for condition in self.val_conditions:
             torch.set_grad_enabled(condition.track_gradients is not False)
