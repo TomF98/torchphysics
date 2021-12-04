@@ -42,7 +42,7 @@ def test_Plotter():
     domain = Parallelogram(R2('x'), [0, 0], [1, 0.0], [0, 1])
     ps = PlotSampler(domain, n_points=200)
     plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps)
-    assert plotter.plot_function == plt_func
+    assert plotter.plot_function.fun == plt_func
     assert plotter.point_sampler == ps
     assert plotter.angle == [30, 30]
     assert plotter.log_interval == None
@@ -138,7 +138,7 @@ def test_2D_quiver():
     def quiver_plt(u):
         return u.detach().cpu().numpy()
     P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 2])
-    ps = PlotSampler(P, density=0.1)
+    ps = PlotSampler(P, density=50)
     plotter = plt.Plotter(plot_function=quiver_plt, point_sampler=ps)
     model = FCN(input_space=R2('x'), output_space=R2('u'))
     fig = plotter.plot(model=model)  
@@ -153,7 +153,7 @@ def test_2D_quiver_with_textbox():
     def quiver_plt(u):
         return u.detach().cpu().numpy()
     P = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 2])
-    ps = PlotSampler(P, density=0.1, data_for_other_variables={'t': 2.023223})
+    ps = PlotSampler(P, density=50, data_for_other_variables={'t': 2.023223})
     plotter = plt.Plotter(plot_function=quiver_plt, point_sampler=ps)
     model = FCN(input_space=R2('x')*R1('t'), output_space=R2('u'))
     fig = plotter.plot(model=model)  
@@ -166,7 +166,7 @@ def test_2D_quiver_with_textbox():
 
 def test_3D_curve():
     I = Interval(R1('i'), -1, 2)
-    ps = PlotSampler(I, density=0.1, data_for_other_variables={'t': 2})
+    ps = PlotSampler(I, density=50, data_for_other_variables={'t': 2})
     plotter = plt.Plotter(plot_function=lambda u:u, point_sampler=ps)
     model = FCN(input_space=R1('i')*R1('t'), output_space=R2('u'))  
     fig = plotter.plot(model=model)  
@@ -193,9 +193,7 @@ def test_contour_2D_with_textbox():
     P = Parallelogram(R2('R'), [0, 0], [1, 0], [0, 2])
     model = FCN(input_space=R2('R')*R2('t'), output_space=R2('u'))    
     ps = PlotSampler(P, n_points=500, data_for_other_variables={'t': [2.0, 0.0]})
-    plotter = plt.Plotter(plot_function=plt_func, point_sampler=ps,
-                          plot_type='contour_surface')
-    fig = plotter.plot(model=model)  
+    fig  = plt.plot(model, plt_func, ps, plot_type='contour_surface')
     assert fig.axes[0].get_xlim() == (-0.05, 1.05)
     assert fig.axes[0].get_xlabel() == 'R_1'
     assert fig.axes[0].get_ylim() == (-0.1, 2.1)

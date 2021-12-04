@@ -1,5 +1,5 @@
 '''This file contains different functions for animating the output of 
-the diffeqmodel-class
+the neural network
 '''
 import matplotlib.pyplot as plt
 import matplotlib.tri as plt_tri
@@ -9,29 +9,27 @@ import numpy as np
 import torch
 
 from .plot_functions import (_compute_output_shape, _create_info_text, 
-                   _create_figure_and_axis, _triangulation_of_domain)
-from ..helper import prepare_user_fun_input
+                             _create_figure_and_axis, _triangulation_of_domain)
+from ...problem.spaces import Points
+from ..user_fun import UserFunction
 
 
 def animate(model, ani_function, ani_sampler, ani_speed=50, angle=[30, 30],
             ani_type=''):
-    '''Main function for animations
+    '''Main function for animations.
     
     Parameters
     ----------
-    model : DiffEqModel
-        A neural network of which the output should be animated.
-    plot_variable : Variabale.
-        The main variable over which the solution should be animated. 
-    domain_points : int 
-        The number of points that should be used for the domain discretization.
-    frame_number : int
-        Number of frames, of the animation. Will be sampled equidistant in the 
-        domain of the animation_variable.
-    ani_speed : Number, optional
-        Speed of the animation.
+    model : torchphysics.models.Model
+        The Model/neural network that should be used in the plot.
+    ani_function : Callable
+        A function that specfices the part of the model that should be animated.
+        Of the same form as the plot function.
+    point_sampler : torchphysics.samplers.AnimationSampler
+        A Sampler that creates the points that should be used for the
+        animation.
     angle : list, optional
-        The view angle for 3D plots. Standart angle is [30, 30]
+        The view angle for 3D plots. Standard angle is [30, 30]
     ani_type : str, optional
         Specifies how the output sholud be animated. If no input is given, the method
         will try to use a fitting way, to show the data. Implemented types are:
@@ -46,7 +44,14 @@ def animate(model, ani_function, ani_sampler, ani_speed=50, angle=[30, 30],
         The figure handle of the created plot   
     animation.FuncAnimation
         The function that handles the animation  
+
+    Notes
+    -----
+    This methode only creates a simple animation and is for complex
+    domains not really optimized. Should only be used to get a rough understanding
+    of the trained neural network.
     '''    
+    ani_function = UserFunction(fun=ani_function)
     animation_points, domain_points, outputs, out_shape = \
         _create_animation_data(model, ani_function, ani_sampler)
     ani_fun = _find_ani_function(ani_sampler, ani_type, out_shape)
@@ -65,56 +70,36 @@ def _create_animation_data(model, ani_function, ani_sampler):
     # first create the plot points and evaluate the model
     animation_points = ani_sampler.sample_animation_points()
     domain_points = ani_sampler.sample_plot_domain_points(animation_points)
-    # if the domain doesnt change with the animation the domain_points were
-    # only created once. Therefore the model is easier to evaluate
-    if ani_sampler.plot_domain_constant:
-        return _animation_data_with_constant_domain(animation_points, domain_points, 
-                                                    model, ani_function, ani_sampler)
-    # else we have to copy the animations data depending on the number of 
-    # domain points
-    return _animation_data_with_changing_domain(animation_points, domain_points, 
+    return _construct_points_and_evaluate_model(animation_points, domain_points, 
                                                 model, ani_function, ani_sampler)
 
-def _animation_data_with_constant_domain(animation_points, domain_points, 
+
+def _construct_points_and_evaluate_model(animation_points, domain_points, 
                                          model, ani_function, ani_sampler):
-    inp_dict = ani_sampler._add_other_variables(domain_points)
     outputs = []
-    ani_key = ani_sampler.animation_key
+    n = len(domain_points)
     # for each frame evaluate the model
     for i in range(ani_sampler.frame_number):
-        repeat_point = animation_points[ani_key][i].repeat_interleave(len(ani_sampler))
-        inp_dict[ani_key] = repeat_point.reshape(-1, 1)
-        output = _evaluate_animation_function(model, ani_function, inp_dict)
+        if ani_sampler.plot_domain_constant:
+            domain_dict = domain_points.coordinates
+        else: 
+            n = len(domain_points[i])
+            domain_dict = domain_points[i].coordinates
+        ith_point = animation_points[i, ].join(ani_sampler.data_for_other_variables)
+        repeated = Points(torch.repeat_interleave(ith_point, n, dim=0),
+                          ith_point.space)
+        current_points = {**domain_dict, **repeated.coordinates}
+        output = _evaluate_animation_function(model, ani_function, current_points)
         outputs.append(output)
     # get the output shape to determine the type of animation
     out_shape = _compute_output_shape(outputs[0])
     return animation_points, domain_points, outputs, out_shape
 
 
-def _animation_data_with_changing_domain(animation_points, domain_points, 
-                                         model, ani_function, ani_sampler):
-    outputs = []
-    ani_key = ani_sampler.animation_key
-    # for each frame evaluate the model
-    for i in range(ani_sampler.frame_number):
-        # the number of points in the domain can change, if a density is used
-        # therefore check always the current number of points
-        current_length = ani_sampler._extract_tensor_len_from_dict(domain_points[i])
-        ani_sampler.set_length(current_length)
-        inp_dict = ani_sampler._add_other_variables(domain_points[i])
-        repeat_point = animation_points[ani_key][i].repeat_interleave(len(ani_sampler))
-        inp_dict[ani_key] = repeat_point.reshape(-1, 1)
-        output = _evaluate_animation_function(model, ani_function, inp_dict)
-        outputs.append(output)
-    # get the output shape to determine the type of animation
-    out_shape = _compute_output_shape(outputs[0])
-    return animation_points, domain_points, outputs, out_shape
-
-
-def _evaluate_animation_function(model, ani_function, inp_dict):
-    model_out = model(inp_dict)
-    inp = prepare_user_fun_input(ani_function, {**model_out, **inp_dict})
-    output = ani_function(**inp)
+def _evaluate_animation_function(model, ani_function, inp_point):
+    model_out = model(Points.from_coordinates(inp_point))
+    data_dict = {**model_out.coordinates, **inp_point}
+    output = ani_function(data_dict)
     if isinstance(output, torch.Tensor):
         output = output.detach().cpu().numpy()
     return output
@@ -162,24 +147,11 @@ def _animation_for_two_outputs(domain_dim):
         raise NotImplementedError("""Can not animate 2D-output on given domain""")
 
 
-def _extract_domain_points(input_dic, domain, length):
-    # for the plot, the points need to be in a array not a dictionary
-    # and are not allowed to be a tensor
-    domain_points = np.zeros((length, domain.dim))
-    current_dim = 0
-    for vname in domain.space:
-        v_dim = domain.space[vname]
-        domain_points[:, current_dim:current_dim+v_dim] = \
-            input_dic[vname].detach().cpu().numpy()
-        current_dim += v_dim
-    return domain_points
-
-
 def animation_line(outputs, ani_sampler, animation_points, domain_points,
                    angle, ani_speed):
     '''Handels 1D animations, inputs are the same as animation().
     '''
-    output_max, output_min, domain_bounds, ani_key, domain_name = \
+    output_max, output_min, domain_bounds, _, domain_name = \
         _compute_animation_params(outputs, ani_sampler, animation_points)
     # construct the figure handle and axis for the animation
     fig = plt.figure()
@@ -193,17 +165,14 @@ def animation_line(outputs, ani_sampler, animation_points, domain_points,
     # create the animation
     def animate(frame_number, outputs, line):
         if ani_sampler.plot_domain_constant:
-            current_points = domain_points[domain_name[0]]
+            current_points = domain_points.as_tensor
         else:
-            current_points = domain_points[frame_number][domain_name[0]]
+            current_points = domain_points[frame_number].as_tensor
         # change line
-        line.set_data(current_points.detach().cpu().numpy().flatten(),
+        line.set_data(current_points[:, 0].detach().cpu().numpy(),
                       outputs[frame_number].flatten())
         # change text-box data
-        set_new_text(ani_sampler.dic_for_other_variables,
-                     animation_points[ani_key][frame_number].item(),
-                     ani_key,
-                     text_box)
+        _update_text_box(animation_points[frame_number, ], ani_sampler, text_box)
     
     ani = anim.FuncAnimation(fig, animate, frames=ani_sampler.frame_number, 
                              fargs=(outputs, line), interval=ani_speed)
@@ -236,16 +205,16 @@ def animation_surface2D(outputs, ani_sampler, animation_points, domain_points,
     # create the animation
     def animate(frame_number, outputs, surf, triangulation):
         surf[0].remove() # remove old surface
-        current_ani = animation_points[ani_key][frame_number]
+        current_ani = animation_points[frame_number, ]
         # have to create a new triangulation, if the domain changes
         if not ani_sampler.plot_domain_constant:
             triangulation = \
                 _triangulate_for_animation(ani_sampler, domain_points[frame_number], 
-                                           {ani_key: current_ani})
+                                           current_ani)
         surf[0] = ax.plot_trisurf(triangulation, outputs[frame_number].flatten(),
                                   color='0.75', cmap=cm.jet, 
                                   vmin=output_min, vmax=output_max, antialiased=False)
-        _update_text_box(current_ani, ani_key, ani_sampler, text_box)
+        _update_text_box(current_ani, ani_sampler, text_box)
 
     ani = anim.FuncAnimation(fig, animate, frames=ani_sampler.frame_number, 
                              fargs=(outputs, surf, triangulation), interval=ani_speed)
@@ -257,17 +226,18 @@ def animation_quiver_2D(outputs, ani_sampler, animation_points, domain_points,
                         angle, ani_speed):
     '''Handles quiver animations in 2D
     '''
-    _, _, domain_bounds, ani_key, domain_names = \
+    if isinstance(domain_points, list):
+        raise NotImplementedError("""Quiver plot for moving domain not implemented""")
+    _, _, domain_bounds, _, domain_names = \
         _compute_animation_params(outputs, ani_sampler, animation_points)
     # for a consistent colors we compute the norm and scale the values
-    color = []
-    max_color = []
+    # for the colors
+    outputs = np.array(outputs)
+    color = np.linalg.norm(outputs, axis=-1)
+    j, _ = np.unravel_index(color.argmax(), color.shape)
+    #outputs /= max_norm
     norm = colors.Normalize()
-    for i in range(ani_sampler.frame_number):
-        color.append(np.linalg.norm(outputs[i], axis=-1))
-        max_color.append(np.amax(color))
     norm.autoscale(color)
-    j = np.argmax(max_color)
     # Create the plot
     fig = plt.figure()
     ax = fig.add_subplot()
@@ -276,33 +246,24 @@ def animation_quiver_2D(outputs, ani_sampler, animation_points, domain_points,
     text_box = ax.text(1.25, 0.5, '', bbox={'facecolor': 'w', 'pad': 5},
                        transform=ax.transAxes)
     # helper quiver plot to get a fixed colorbar and a constant scaling
-    current_length = ani_sampler._extract_tensor_len_from_dict(domain_points)
-    numpy_domain = _extract_domain_points(domain_points, ani_sampler.domain,
-                                          current_length)
-    quiver = ax.quiver(numpy_domain[:, 0], numpy_domain[:, 1], 
+    domain_points = domain_points.as_tensor.detach().cpu().numpy()
+    quiver = ax.quiver(domain_points[:, 0], domain_points[:, 1], 
                        outputs[j][:, 0], outputs[j][:, 1],
-                       color=cm.jet(norm(color[j])),
-                       scale=None, angles='xy', units='xy')
+                       color=cm.jet(norm(color[:, 0])),
+                       scale=None, angles='xy',
+                       units='xy', zorder=10)
     sm = cm.ScalarMappable(cmap=cm.jet, norm=norm)
     quiver._init() # to fix the arrow scale
     plt.colorbar(sm)
-
     # create the animation
     def animate(frame_number, outputs, quiver):
         # set new coords. of arrow head and color
-        print(quiver)
-        quiver.remove()
-        quiver = ax.quiver(numpy_domain[:, 0], numpy_domain[:, 1], 
-                           outputs[frame_number][:, 0], outputs[frame_number][:, 1],
-                           color=cm.jet(norm(color[frame_number])),
-                           scale=None, angles='xy', units='xy')
-        # get new point auf the animation variable and set text
-        current_ani = animation_points[ani_key][frame_number]
-        text_dict = {ani_key: current_ani.item(), 
-                     **ani_sampler.dic_for_other_variables}
-        info_string = _create_info_text(text_dict)  
-        text_box.set_text(info_string)
-
+        quiver.set_UVC(outputs[frame_number][:, 0], outputs[frame_number][:, 1])
+        quiver.set_color(cm.jet(norm(color[frame_number, :])))
+        # set new text
+        current_ani = animation_points[frame_number, ]
+        _update_text_box(current_ani, ani_sampler, text_box)
+    
     ani = anim.FuncAnimation(fig, animate, frames=ani_sampler.frame_number, 
                              fargs=(outputs, quiver), interval=ani_speed)
 
@@ -333,7 +294,7 @@ def animation_contour_2D(outputs, ani_sampler, animation_points, domain_points,
     con[0].remove()
     # create the animation
     def animate(frame_number, outputs, con, triangulation):
-        current_ani = animation_points[ani_key][frame_number]
+        current_ani = animation_points[frame_number, ]
         # remove old contour
         if isinstance(con[0], plt_tri.TriContourSet):
             for tp in con[0].collections:
@@ -342,12 +303,12 @@ def animation_contour_2D(outputs, ani_sampler, animation_points, domain_points,
         if not ani_sampler.plot_domain_constant:
             triangulation = \
                 _triangulate_for_animation(ani_sampler, domain_points[frame_number], 
-                                           {ani_key: current_ani})
+                                           current_ani)
         # set new contour
         con[0] = ax.tricontourf(triangulation, outputs[frame_number].flatten(),
                                 100, cmap=cm.jet, vmin=output_min, vmax=output_max)
         # get new point auf the animation variable and set text
-        _update_text_box(current_ani, ani_key, ani_sampler, text_box)
+        _update_text_box(current_ani, ani_sampler, text_box)
     
     ani = anim.FuncAnimation(fig, animate, frames=ani_sampler.frame_number, 
                              fargs=(outputs, con, triangulation), interval=ani_speed)
@@ -357,7 +318,7 @@ def animation_contour_2D(outputs, ani_sampler, animation_points, domain_points,
 
 def _compute_animation_params(outputs, ani_sampler, animation_points):
     output_max, output_min = _get_max_min(outputs)
-    domain_bounds = ani_sampler.domain.bounding_box(**animation_points)
+    domain_bounds = ani_sampler.domain.bounding_box(animation_points)
     ani_key = ani_sampler.animation_key
     domain_name = list(ani_sampler.domain.space.keys())
     return output_max,output_min,domain_bounds,ani_key,domain_name
@@ -391,24 +352,22 @@ def _set_x_y_axis_data(bounds, ax, domain_varibales):
         ax.set_ylabel(domain_varibales[1])  
 
 
-def _triangulate_for_animation(ani_sampler, domain_points, ani_point={}):
-    current_length = ani_sampler._extract_tensor_len_from_dict(domain_points)
-    numpy_domain = _extract_domain_points(domain_points, ani_sampler.domain,
-                                          current_length)
-    evaluated_domain = ani_sampler.domain(**ani_point)
+def _triangulate_for_animation(ani_sampler, domain_points, ani_point=Points.empty()):
+    numpy_domain = _extract_domain_points(domain_points)
+    evaluated_domain = ani_sampler.domain(**ani_point.coordinates)
     triangulation = _triangulation_of_domain(evaluated_domain, numpy_domain)
     return triangulation
 
 
-def set_new_text(variable_dic, new_ani_point, ani_name, text_box):
-    variable_dic[ani_name] = new_ani_point
-    info_string = _create_info_text(variable_dic)  
-    text_box.set_text(info_string)
+def _extract_domain_points(input_points):
+    # for the plot, the points need to be in a array not a dictionary
+    # and are not allowed to be a tensor
+    domain_points = input_points.as_tensor.detach().cpu().numpy()
+    return domain_points
 
 
-def _update_text_box(current_ani, ani_key, ani_sampler, text_box):
+def _update_text_box(current_ani, ani_sampler, text_box):
     # get new point auf the animation variable and set text
-    text_dict = {ani_key: current_ani.item(), 
-                 **ani_sampler.dic_for_other_variables}
-    info_string = _create_info_text(text_dict)  
+    text_points = ani_sampler.data_for_other_variables.join(current_ani)
+    info_string = _create_info_text(text_points)  
     text_box.set_text(info_string)
