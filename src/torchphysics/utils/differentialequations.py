@@ -61,7 +61,7 @@ class BurgersEquation(torch.nn.Module):
 
     def forward(self, u, **inputs):
         jac_t = jac(u, inputs[self.time_var]).squeeze(dim=2)  # time derivative (2d)
-        conv = convective(u, inputs[self.spatial_var], u)  # convection term
+        conv = convective(u, u, inputs[self.spatial_var])  # convection term
         if self.viscosity != 0.0:
             # put laplace in one vector
             laplace_vec = torch.cat(
@@ -97,7 +97,7 @@ class IncompressibleNavierStokesEquation(torch.nn.Module):
         #self.viscosity = viscosity
         #self.spatial_var = spatial_var
         #self.time_var = time_var
-
+    """
     def forward(self, u, p, **inputs):
         jac_t = jac(u, inputs[self.time_var]).squeeze(dim=2)  # time derivative (2d)
         conv = convective(u, inputs[self.spatial_var], u)  # convection term
@@ -109,3 +109,4 @@ class IncompressibleNavierStokesEquation(torch.nn.Module):
             return jac_t + conv - self.viscosity * laplace_vec
         else:
             return jac_t + conv
+    """

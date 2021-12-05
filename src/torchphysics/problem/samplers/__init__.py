@@ -5,5 +5,5 @@ from .sampler_base import (PointSampler, ProductSampler,
                            StaticSampler)
 from .random_samplers import RandomUniformSampler, GaussianSampler, LHSSampler
 from .grid_samplers import GridSampler, ExponentialIntervalSampler
-from .plot_samplers import PlotSampler
+from .plot_samplers import PlotSampler, AnimationSampler
 from .data_samplers import DataSampler

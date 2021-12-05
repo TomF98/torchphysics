@@ -1,7 +1,7 @@
 import abc
 import torch
 
-from ...utils.user_fun import UserFunction
+from ...utils.user_fun import DomainUserFunction, UserFunction
 from ..spaces.points import Points
 
 
@@ -43,8 +43,8 @@ class Domain:
         """
         out = []
         for d_param in domain_params:
-            if not isinstance(d_param, UserFunction):
-                d_param = UserFunction(d_param)
+            if not isinstance(d_param, DomainUserFunction):
+                d_param = DomainUserFunction(d_param)
             out.append(d_param)
         return tuple(out)
 

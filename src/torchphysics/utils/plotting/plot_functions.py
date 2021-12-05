@@ -8,12 +8,12 @@ import numpy as np
 import torch
 from matplotlib import cm, colors
 
-from ..helper import prepare_user_fun_input
+from ..user_fun import UserFunction
 from ...problem.spaces.points import Points
 
 
 class Plotter():
-    '''Object to collect plotting properties
+    '''Object to collect plotting properties.
 
     Parameters
     ----------
@@ -46,7 +46,7 @@ class Plotter():
 
     def __init__(self, plot_function, point_sampler, angle=[30, 30],
                  log_interval=None, plot_type=''):
-        self.plot_function = plot_function
+        self.plot_function = UserFunction(plot_function)
         self.point_sampler = point_sampler
         self.angle = angle
         self.log_interval = log_interval
@@ -63,7 +63,7 @@ def plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
 
     Parameters
     ----------
-    model : DiffeqModel
+    model : torchphysics.models.Model
         The Model/neural network that should be used in the plot.
     plot_function : Callable
         A function that specfices the part of the model that should be plotted.
@@ -74,7 +74,7 @@ def plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
         to plot the first entry of 'u'. For the derivative we could write:
         |    plot_func(u, x):
         |        return grad(u, x)
-    point_sampler : Sampler
+    point_sampler : torchphysics.samplers.PlotSampler
         A Sampler that creates the points that should be used for the
         plot.
     angle : list, optional
@@ -92,7 +92,16 @@ def plot(model, plot_function, point_sampler, angle=[30, 30], plot_type=''):
     -------
     plt.figure
         The figure handle of the created plot
+
+
+    Notes
+    -----
+    What this function does is:
+    creating points with sampler -> evaluate model -> evalute plot function
+    -> create the plot
     '''
+    if not isinstance(plot_function, UserFunction):
+        plot_function = UserFunction(fun=plot_function)
     inp_points, output, out_shape = _create_plot_output(model, plot_function,
                                                         point_sampler)
     domain_points = _extract_domain_points(inp_points, point_sampler.domain, 
@@ -115,8 +124,7 @@ def _create_plot_output(model, plot_function, point_sampler):
     data_dict = {**model_out.coordinates, **inp_points_dict}
     # When model output correct: data_dict = {**model_out.coordinates, **inp_points.coordinates}
     # now evaluate the plot function
-    inp = prepare_user_fun_input(plot_function, data_dict)
-    output = plot_function(**inp)
+    output = plot_function(data_dict)
     if isinstance(output, torch.Tensor):
         output = output.detach().cpu().numpy()
     # get dimension of the output
@@ -306,6 +314,8 @@ def _create_info_text(data_for_other_variables):
     for vname, data in data_dict.items():
         if data.shape[1] == 1:
             data = data.item()
+        else:
+            data = data[0].detach().cpu().numpy()
         if isinstance(data, float):
             data = round(data, 4)
         info_text += vname + ' = ' + str(data)

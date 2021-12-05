@@ -54,8 +54,7 @@ class PlotSampler(PointSampler):
             self.data_for_other_variables = Points.empty()
         else:
             torch_data = self.transform_data_to_torch(data_for_other_variables)
-            self.data_for_other_variables = \
-                Points.from_coordinates(torch_data)
+            self.data_for_other_variables = Points.from_coordinates(torch_data)
 
     def transform_data_to_torch(self, data_for_other_variables):
         torch_data = {}
@@ -138,20 +137,20 @@ class AnimationSampler(PlotSampler):
         The desiered density of the created points, in the plot domain.
     device : str or torch device, optional
         The device of the model/function.
-    dic_for_other_variables : dict, optional
+    data_for_other_variables : dict, optional
         Since the animation will only evaluate the model at specific points, 
         the values for all other variables are needed. 
         E.g. {'D' : [1,2], ...}
     """
     def __init__(self, plot_domain, animation_domain, frame_number, 
                  n_points=None, density=None, device='cpu',
-                 dic_for_other_variables={}):
+                 data_for_other_variables={}):
         super().__init__(plot_domain=plot_domain, n_points=n_points,
                          density=density, device=device,
-                         dic_for_other_variables=dic_for_other_variables)
+                         data_for_other_variables=data_for_other_variables)
         self._check_correct_types(animation_domain)
         self.frame_number = frame_number
-        self.animation_domain = self._evaluate_domain(animation_domain)
+        self.animation_domain = animation_domain(**data_for_other_variables)
         self.animatoin_sampler = \
             self._construct_sampler_for_Interval(self.animation_domain, n=frame_number)
 
@@ -172,7 +171,7 @@ class AnimationSampler(PlotSampler):
 
     def sample_animation_points(self):
         ani_points = self.animatoin_sampler.sample_points()
-        num_of_points = self._extract_tensor_len_from_dict(ani_points)
+        num_of_points = len(ani_points)
         self.frame_number = num_of_points
         self._set_device_and_grad_true(ani_points)
         return ani_points
@@ -180,18 +179,17 @@ class AnimationSampler(PlotSampler):
     def sample_plot_domain_points(self, animation_points):
         if self.plot_domain_constant:
             plot_points = self.sampler.sample_points()
-            num_of_points = self._extract_tensor_len_from_dict(plot_points)
+            num_of_points = len(plot_points)
             self.set_length(num_of_points)
             self._set_device_and_grad_true(plot_points)
             return plot_points
-        return self._sample_params_dependent(**animation_points)
+        return self._sample_params_dependent(animation_points)
 
-    def _sample_params_dependent(self, **params):
+    def _sample_params_dependent(self, params):
         output_list = []
         for i in range(self.frame_number):
-            ith_ani_points = self._extract_points_from_dict(i, params)
-            plot_points = self.sampler.sample_points(**ith_ani_points)
-            for vname in self.domain.space:
-                plot_points[vname].to(self.device)
+            ith_ani_points = params[i, ]
+            plot_points = self.sampler.sample_points(ith_ani_points)
+            plot_points._t.to(self.device)
             output_list.append(plot_points)
         return output_list

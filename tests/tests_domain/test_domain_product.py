@@ -138,7 +138,7 @@ def test_product_volume_if_volume_was_set_before():
     C = Circle(R2('x'), [0, 0], lambda t: 10*t)
     P = C * I
     P.set_volume(23.0)
-    assert torch.isclose(P.volume(), torch.tensor(23.0))
+    assert torch.isclose(torch.tensor(P.volume()), torch.tensor(23.0))
 
 
 def test_product_volume_dependet_only_on_b():

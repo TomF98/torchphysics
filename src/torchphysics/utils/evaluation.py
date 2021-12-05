@@ -5,6 +5,7 @@ import time
 import torch
 
 from .user_fun import UserFunction
+from ..problem.spaces import Points
 
 
 def compute_min_and_max(model, sampler, evaluation_fn=lambda u:u, 
@@ -38,13 +39,15 @@ def compute_min_and_max(model, sampler, evaluation_fn=lambda u:u,
     input_points._t.requires_grad = requieres_grad
     input_points._t.to(device)
     # eval. model
+    inp_points_dict = input_points.coordinates
     start_model_eval = time.time()
-    model_out = model(input_points)
+    model_out = model(Points.from_coordinates(inp_points_dict))
     end_model_eval = time.time()
     # eval user function
     evaluation_fn = UserFunction(evaluation_fn)
+    data_dict = {**model_out.coordinates, **inp_points_dict}
     start_func_eval = time.time()
-    prediction = evaluation_fn(model_out.join(input_points)) 
+    prediction = evaluation_fn(data_dict) 
     end_func_eval = time.time()
     max_pred = torch.max(prediction)
     min_pred = torch.min(prediction)
