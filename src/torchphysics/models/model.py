@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from ..problem.spaces import Points, Space
 
+
 class Model(nn.Module):
     """Neural networks that can be trained to fulfill user-defined conditions.
 
@@ -30,11 +31,11 @@ class NormalizationLayer(Model):
         The domain from which this layer expects sampled points. The layer will use
         its bounding box to compute the normalization factors.
     """
-    def __init__(self, domain, requires_grad=True):
+    def __init__(self, domain):
         super().__init__(input_space=domain.space, output_space=domain.space)
         self.normalize = nn.Linear(domain.space.dim, domain.space.dim)
 
-        box = domain.bounding_box
+        box = domain.bounding_box()
         mins = box[::2]
         maxs = box[1::2]
 
@@ -53,6 +54,7 @@ class NormalizationLayer(Model):
 
     def forward(self, points):
         return Points(self.normalize(points), self.output_space)
+
 
 class AdaptiveWeightLayer(Model):
     """
@@ -98,16 +100,23 @@ class AdaptiveWeightLayer(Model):
 
 
 class Parallel(Model):
-    """
-    A model that wraps multiple models which should be applied in parallel.
+    """A model that wraps multiple models which should be applied in parallel.
+
+    Parameters
+    ----------
+    *models :
+        The models that should be evaluated parallel. The evaluation
+        happens in the order that the models are passed in.
+        The outputs of the models will be concatenated. 
+        The models are not allowed to have the same output spaces, but can
+        have the same input spaces.
     """
     def __init__(self, *models):
         input_space = Space({})
         output_space = Space({})
         for model in models:
-            assert input_space.keys().isdisjoint(model.input_space)
             assert output_space.keys().isdisjoint(model.output_space)
-            input_space = input_space * model.input_space
+            input_space = input_space * Space(model.input_space - input_space)
             output_space = output_space * model.output_space
         super().__init__(input_space, output_space)
         self.models = nn.ModuleList(models)
@@ -115,12 +124,19 @@ class Parallel(Model):
     def forward(self, points):
         out = []
         for model in self.models:
-            out.append(model(points[:, list(model.input_space.keys())]).as_tensor)
-        return Points(torch.cat((out), dim=0), self.output_space)
+            out.append(model(points[:, list(model.input_space.keys())]))
+        return Points.joined(*out)
 
 class Sequential(Model):
-    """
-    A model that wraps multiple models which should be applied sequentially.
+    """A model that wraps multiple models which should be applied sequentially.
+
+    Parameters
+    ----------
+    *models : 
+        The models that should be evaluated sequentially. The evaluation
+        happens in the order that the models are passed in.
+        To work correcty the output of the i-th model has to fit the input
+        of the i+1-th model.
     """
     def __init__(self, *models):
         super().__init__(models[0].input_space, models[-1].output_space)

@@ -1,4 +1,3 @@
-from typing import Iterable
 import torch
 import torch.nn as nn
 
@@ -7,9 +6,29 @@ from ..problem.spaces import Points
 
 
 class FCN(Model):
-    """
-    A simple fully connected neural network.
+    """A simple fully connected neural network.
 
+    Parameters
+    ----------
+    input_space : Space
+        The space of the points the can be put into this model.
+    output_space : Space
+        The space of the points returned by this model.
+    hidden : list or tuple
+        The number and size of the hidden layers of the neural network.
+        The lenght of the list/tuple will be equal to the number
+        of hidden layers, while the i-th entry will determine the number
+        of neurons of each layer.
+        E.g hidden = (10, 5) -> 2 layers, with 10 and 5 neurons.
+    activations : torch.nn or list, optional
+        The activation functions of this network. If a single function is passed
+        as an input, will use this function for each layer.
+        If a list is used, will use the i-th entry for i-th layer.
+        Deafult is nn.Tanh().
+    xavier_gains : float or list, optional
+        For the weight initialization a Xavier/Glorot algorithm will be used.
+        The gain can be specified over this value.
+        Default is 5/3. 
     """
     def __init__(self,
                  input_space,
