@@ -3,7 +3,8 @@ from .problem import spaces
 from .problem import domains
 from .problem import samplers
 from .problem import conditions
-from .solver import Solver
+from .models import *
+from .solver import Solver, OptimizerSetting
 
 if sys.version_info[:2] >= (3, 8):
     # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
