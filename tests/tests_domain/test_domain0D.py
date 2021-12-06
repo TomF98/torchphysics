@@ -2,6 +2,7 @@ import pytest
 import torch
 import numpy as np
 
+from torchphysics.problem.domains.domain import Domain
 from torchphysics.problem.domains.domain0D.point import Point
 from torchphysics.problem.spaces.space import R1, R2, R3
 from torchphysics.problem.spaces.points import Points
@@ -15,6 +16,12 @@ def p2(t):
     if not isinstance(t, torch.Tensor):
         return [2*t, 0]
     return torch.column_stack((2*t, torch.zeros_like(t)))
+
+
+def test_create_domain():
+    d = Domain(R2('x'))
+    assert d.dim == 2
+    assert d._user_volume is None
 
 
 def test_create_point():
@@ -163,6 +170,13 @@ def test_point_random_sampling_with_n_moving_point():
     assert points.shape == (50, 1)
     assert all(torch.isclose(points[:25], torch.tensor(2.0)))
     assert all(torch.isclose(points[25:], torch.tensor(0.0)))
+
+
+def test_point__cant_random_sample_with_d_at_different_moments():
+    P = Point(R1('x'), p)
+    time = Points(torch.tensor([[1.0], [0.0]]), R1('t'))
+    with pytest.raises(ValueError):
+        P.sample_random_uniform(d=25, params=time).as_tensor
 
 
 def test_point_random_sampling_with_n_moving_point_higher_dim():

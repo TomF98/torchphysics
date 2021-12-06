@@ -299,4 +299,4 @@ class BoundaryDomain(Domain):
             The tensor is of the shape (len(points), self.dim) and contains the 
             normal vector at each entry from points.
         """
-        pass
+        raise NotImplementedError
