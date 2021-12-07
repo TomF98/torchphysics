@@ -10,10 +10,6 @@ from ...models import Parameter
 from ...utils import UserFunction
 from ..spaces import Points
 from ..samplers import StaticSampler
-"""
-TODO: check creation of tensors on correct devices, maybe additional flags
-    are necessary
-"""
 
 class Condition(torch.nn.Module):
     """
@@ -215,14 +211,14 @@ class IntegralCondition(Condition):
     def poisson_residual(u, x):
         return 0.5*(torch.sum(grad(u)**2), dim=1)
     """
-    def __init__(self, module, sampler, residual_fn, track_gradients=True,
+    def __init__(self, module, sampler, integrand_fn, track_gradients=True,
                  data_functions={}, parameter=Parameter.empty(), name='deepritzcondition',
                  weight=1.0):
         super().__init__(name=name, weight=weight, track_gradients=track_gradients)
         self.module = module
         self.parameter = parameter
         self.sampler = sampler
-        self.residual_fn = UserFunction(residual_fn)
+        self.integrand_fn = UserFunction(integrand_fn)
         self.data_functions = self._setup_data_functions(data_functions, sampler)
     
     def forward(self):
@@ -234,7 +230,7 @@ class IntegralCondition(Condition):
             data[fun] = self.data_functions[fun](x_coordinates)
 
         y = self.module(x)
-        return torch.mean(self.residual_fn({**y.coordinates,
+        return torch.mean(self.integrand_fn({**y.coordinates,
                                             **x_coordinates,
                                             **self.parameter.coordinates,
                                             **data}),

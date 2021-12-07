@@ -7,6 +7,9 @@ import pytorch_lightning as pl
 
 
 class OptimizerSetting:
+    """
+    A helper class to sum up the optimization setup in a single class.
+    """
     def __init__(self, optimizer_class, lr, optimizer_args={},
                  scheduler_class=None, scheduler_args={}):
         self.optimizer_class = optimizer_class
@@ -18,8 +21,20 @@ class OptimizerSetting:
 
 class Solver(pl.LightningModule):
     """
-    Handles optimization and metric logging. All necessary models are
-    already hold by the train and val conditions.
+    A LightningModule that handles optimization and metric logging of given
+    conditions.
+
+    Parameters
+    ----------
+    train_conditions : tuple or list
+        Tuple or list of conditions to be optimized. The weighted sum of their
+        losses will be computed and minimized.
+    val_conditions : tuple or list
+        Conditions to be tracked during the validation part of the training, can
+        be used e.g. to track errors comparede to measured data.
+    optimizer_setting : OptimizerSetting
+        A OptimizerSetting object that contains all necessary parameters for
+        optimizing, see :class:`OptimizerSetting`.
     """
     def __init__(self,
                  train_conditions,
@@ -41,6 +56,10 @@ class Solver(pl.LightningModule):
                 "of 1000 steps.")
             steps = 1000
         return torch.utils.data.DataLoader(torch.empty(steps))
+    
+    def on_train_end(self):
+        if self.device.type != 'cpu':
+            torch.set_default_tensor_type(torch.FloatTensor)
     
     def training_step(self, batch, batch_idx):
         if self.device.type != 'cpu':
