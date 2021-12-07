@@ -152,19 +152,19 @@ def test_pinncondition_forward_with_data_function():
 def test_create_ritzcondition():
     module = UserFunction(helper_fn)
     ps = GridSampler(Interval(R1('x'), 0, 1), n_points=25)
-    cond = DeepRitzCondition(module=module, sampler=ps, residual_fn=lambda u:u)
+    cond = DeepRitzCondition(module=module, sampler=ps, integrand_fn=lambda u:u)
     assert isinstance(cond, torch.nn.Module)
     assert cond.name == 'deepritzcondition'
     assert cond.module == module
     assert cond.sampler == ps
-    assert isinstance(cond.residual_fn, UserFunction)
+    assert isinstance(cond.integrand_fn, UserFunction)
 
 
 def test_ritzcondition_forward():
     module = UserFunction(helper_fn)
     ps = GridSampler(Interval(R1('x'), 0, 1), n_points=25)
     cond = DeepRitzCondition(module=module, sampler=ps,
-                             residual_fn=lambda u:torch.sum(u, dim=1))
+                             integrand_fn=lambda u:torch.sum(u, dim=1))
     out = cond()
     assert isinstance(out, torch.Tensor)
     assert out.requires_grad
@@ -176,7 +176,7 @@ def test_ritzcondition_forward_with_data_function():
     ps = GridSampler(Interval(R1('x'), 0, 1), n_points=25)
     data_fn = {'f': lambda x:x}
     cond = DeepRitzCondition(module=module, sampler=ps,
-                             residual_fn=lambda u,f:torch.sum(u+f, dim=1), 
+                             integrand_fn=lambda u,f:torch.sum(u+f, dim=1), 
                              data_functions=data_fn)
     out = cond()
     assert isinstance(out, torch.Tensor)
