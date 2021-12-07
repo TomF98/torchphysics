@@ -6,7 +6,25 @@ import matplotlib.pyplot as plt
 
 
 def scatter(subspace, *samplers):
+    """Shows (one batch) of used points in the training. If the sampler is
+    static, the shown points will be the points for the training. If not
+    the points may vary, depending of the sampler. 
 
+    Parameters
+    ----------
+    subspace : torchphysics.problem.Space
+        The (sub-)space of which the points should be plotted.
+        Only plotting for dimensions <= 3 is possible.
+    *samplers : torchphysics.problem.Samplers
+        The diffrent samplers for which the points should be plotted.
+        The plot for each sampler will be created in the order there were
+        passed in.
+
+    Returns
+    -------
+    fig : matplotlib.pyplot.figure
+        The figure handle of the plot.
+    """
     assert subspace.dim <= 3, "Can only scatter points in dimensions <= 3."
 
     fig, ax, scatter_fn = _choose_scatter_function(subspace.dim)
