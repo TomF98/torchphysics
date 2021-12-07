@@ -300,6 +300,14 @@ def test_parallelogram_volume_with_variable_corners():
     assert all(torch.isclose(volume, torch.tensor([[5], [8.0], [9]])))
 
 
+def test_parallelogram_user_function_transform():
+    P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
+    trans_1 = P._check_shape_of_evaluated_user_function(torch.tensor([2.0]))
+    assert trans_1 == 2.0
+    trans_2 = P._check_shape_of_evaluated_user_function(2.0)
+    assert trans_2 == 2.0
+
+
 def test_bounding_box_parallelogram():
     P = Parallelogram(R2('x'), [0, 0], [2, 0], [0, 1])
     bounds = P.bounding_box()
@@ -623,6 +631,14 @@ def test_triangle_volume_with_variable_corners():
     time = Points( torch.tensor([0, 1, 2.0]).reshape(-1, 1), R1('t'))
     volume = T.volume(time)
     assert all(torch.isclose(volume, torch.tensor([[2.5], [4.0], [4.5]])))
+
+
+def test_triangle_user_function_transform():
+    T = Triangle(R2('x'), [0, 0], [2, 0], [0, 1])
+    trans_1 = T._check_shape_of_evaluated_user_function(torch.tensor([2.0]))
+    assert trans_1 == 2.0
+    trans_2 = T._check_shape_of_evaluated_user_function(2.0)
+    assert trans_2 == 2.0
 
 
 def test_bounding_box_triangle():

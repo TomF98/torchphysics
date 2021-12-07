@@ -1,16 +1,27 @@
 from collections import Counter, OrderedDict
-from typing import Iterable
-
-import torch
 
 
 class Space(Counter, OrderedDict):
+    """A Space defines (and assigns) the dimensions of the variables 
+    that appear in the differentialequation. This class sholud not be instanced
+    directly, rather the corresponding child classes.
 
+    Parameters
+    ----------
+    variables_dims : dict
+        A dictionary containing the name of the variables and the dimension
+        of the respective variable.
+    """
     def __init__(self, variables_dims):
         # set counter of variable names and their dimensionalities
         super().__init__(variables_dims)
 
     def __mul__(self, other):
+        """Creates the product space of the two input spaces. Allows the 
+        construction of higher dimensional spaces with 'mixed' variable names.
+        E.g R1('x')*R1('y') is a two dimensional space where one axis is 'x'
+        and the other stands for 'y'.
+        """
         assert isinstance(other, Space)
         return Space(self + other)
 
@@ -37,6 +48,8 @@ class Space(Counter, OrderedDict):
 
     @property
     def dim(self):
+        """Returns the dimension of the space (sum of factor spaces)
+        """
         return sum(self.values())
     
     @property
@@ -61,15 +74,36 @@ class Space(Counter, OrderedDict):
 
 
 class R1(Space):
+    """The space for one dimensional real numbers.
+
+    Parameters
+    ----------
+    variable_name: str
+        The name of the variable that belongs to this space.
+    """
     def __init__(self, variable_name):
         super().__init__({variable_name: 1})
 
 
 class R2(Space):
+    """The space for two dimensional real numbers.
+
+    Parameters
+    ----------
+    variable_name: str
+        The name of the variable that belongs to this space.
+    """
     def __init__(self, variable_name):
         super().__init__({variable_name: 2})
 
 
 class R3(Space):
+    """The space for three dimensional real numbers.
+
+    Parameters
+    ----------
+    variable_name: str
+        The name of the variable that belongs to this space.
+    """
     def __init__(self, variable_name):
         super().__init__({variable_name: 3})

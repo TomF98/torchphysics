@@ -1,3 +1,5 @@
+"""Contains a class that handles the storage of all created data points.
+"""
 from typing import Iterable
 import torch
 
@@ -5,9 +7,22 @@ from .space import Space
 
 
 class Points():
-    """
-    A set of points in a space, stored as a torch.Tensor.
-    Supports indexing and slicing as []
+    """A set of points in a space, stored as a torch.Tensor.
+
+    Parameters
+    ----------
+    data : torch.tensor, np.array or list
+        The data points that should be stored.
+        Have to be of the shape (batch_length, space.dimension).
+    space : torchphysics.spaces.Space
+        The space to which these points belongs to.
+
+    Notes
+    -----
+    This class is essentially a combination of a torch.Tensor and a
+    dictionary. So all data points can be stored as a single tensor, where
+    we efficently can access and transform the data. But at the same time
+    have the knowledge of what points belong to which space/variable.
     """
     def __init__(self, data, space, **kwargs):
         self._t = torch.as_tensor(data, **kwargs)
@@ -17,22 +32,40 @@ class Points():
     
     @classmethod
     def empty(cls, **kwargs):
-        """
-        Creates an empty Points object.
+        """Creates an empty Points object.
+
+        Returns
+        -------
+        Points
+            The empty Points-object.
         """
         return cls(torch.empty(0,0, **kwargs), Space({}))
     
     @classmethod
     def joined(cls, *points_l):
+        """Concatenates different Points to one single Points-Object.
+        Will we use torch.cat on the data of the different Points and 
+        create the product space of the Points spaces.
+
+        Parameters
+        ----------
+        *points_l :
+            The different Points that should be connected.
+
+        Returns
+        -------
+        Points
+            the created Points object.
+        """
         points_out = []
         space_out = Space({})
         for points in points_l:
             if points.isempty:
                 continue
-            assert points_out.space.keys().isdisjoint(points.space)
-            points_out.append(points)
+            assert space_out.keys().isdisjoint(points.space)
+            points_out.append(points._t)
             space_out = space_out * points.space
-        return cls(torch.cat(points_out, dim=0), space_out)
+        return cls(torch.cat(points_out, dim=1), space_out)
 
 
     @classmethod
@@ -47,8 +80,8 @@ class Points():
 
         Returns
         -------
-        points : Points or Point
-            the created points object
+        points : Points
+            the created points object.
         """
         point_list = []
         space = {}
@@ -77,8 +110,9 @@ class Points():
         variable, e.g. {'x': torch.Tensor, 't': torch.Tensor}
         """
         out = {}
+        variable_slice = self._variable_slices
         for var in self.space:
-            out[var] = self._t[:,self._variable_slices[var]]
+            out[var] = self._t[:, variable_slice[var]]
         return out
     
     @property
@@ -148,37 +182,53 @@ class Points():
         slow) loops.
         """
         for i in range(len(self)):
-            yield Points(self._t[i,:], self.space)
+            yield self[i, :]
 
     def __eq__(self, other):
-        return self.space == other.space and self._t == other._t
+        return self.space == other.space and torch.equal(self._t, other._t)
     
     def __add__(self, other):
+        """Adds the data of two Points, have to lay in the same space.
+        """
         assert isinstance(other, Points)
         assert other.space == self.space
         return Points(self._t + other._t, self.space)
 
     def __sub__(self, other):
+        """Substracts the data of two Points, have to lay in the same space.
+        """
         assert isinstance(other, Points)
         assert other.space == self.space
         return Points(self._t - other._t, self.space)
 
     def __mul__(self, other):
+        """Pointwise multiplies the data of two Points, 
+        have to lay in the same space.
+        """
         assert isinstance(other, Points)
         assert other.space == self.space
         return Points(self._t * other._t, self.space)
 
     def __pow__(self, other):
+        """Pointwise raises the data of the first Points object to the
+        power of the second one.
+        """
         assert isinstance(other, Points)
         assert other.space == self.space
         return Points(self._t ** other._t, self.space)
 
     def __truediv__(self, other):
+        """Pointwise divides the data of two Points, 
+        have to lay in the same space.
+        """
         assert isinstance(other, Points)
         assert other.space == self.space
         return Points(self._t / other._t, self.space)
     
     def __or__(self, other):
+        """Appends the data points of the second Point behind the 
+        data of the first Point. (torch.cat((data_1, data_2), dim=0))
+        """
         assert isinstance(other, Points)
         if self.isempty:
             return other
@@ -188,6 +238,9 @@ class Points():
         return Points(torch.cat([self._t, other._t], dim=0), self.space)
     
     def join(self, other):
+        """Stacks the data points of the second Point behind the 
+        data of the first Point. (torch.cat((data_1, data_2), dim=1))
+        """
         assert isinstance(other, Points)
         if self.isempty:
             return other
@@ -197,6 +250,14 @@ class Points():
         return Points(torch.cat([self._t, other._t], dim=1), self.space * other.space)
 
     def repeat(self, *sizes):
+        """Repeats this points data along the specified dimensions. 
+        Uses torch.repeat and will therefore repeat the data 'batchwise'.
+
+        Parameters
+        ----------
+        *sizes :
+            The number of repeats per dimension. 
+        """
         return Points(self._t.repeat(*sizes), self.space)
 
     @classmethod

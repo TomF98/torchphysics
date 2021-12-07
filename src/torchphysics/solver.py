@@ -80,7 +80,6 @@ class Solver(pl.LightningModule):
             torch.set_grad_enabled(condition.track_gradients is not False)
             self.log(f'val/{condition.name}', condition.weight * condition())
 
-    
     def configure_optimizers(self):
         optimizer = self.optimizer_setting.optimizer_class(
             self.parameters(),
@@ -91,11 +90,11 @@ class Solver(pl.LightningModule):
             return optimizer
 
         lr_scheduler = self.optimizer_setting.scheduler_class(optimizer,
-            **self.optimizer_setting.scheduler_args
+            **self.optimizer_setting.scheduler_args['args']
         )
         lr_scheduler = {'scheduler': lr_scheduler, 'name': 'learning_rate', 
                         'interval': 'epoch', 'frequency': 1}
-        for input_name in self.scheduler:
-            if not input_name in ['class', 'args']:
+        for input_name in self.optimizer_setting.scheduler_args:
+            if not input_name == 'args':
                 lr_scheduler[input_name] = self.optimizer_setting.scheduler_args[input_name]
         return [optimizer], [lr_scheduler]

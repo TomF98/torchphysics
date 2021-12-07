@@ -93,7 +93,7 @@ class DataCondition(Condition):
 
     def forward(self):
         x, y = next(self.iterator)
-        return self.norm(self.module(x) - y)
+        return self.norm(self.module(x).as_tensor, y)
 
 
 class ResidualCondition(Condition):
