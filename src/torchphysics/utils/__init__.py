@@ -9,5 +9,5 @@ from .differentialoperators import (laplacian,
                                     normal_derivative)
 
 from .user_fun import UserFunction
-from .plotting import plot, Plotter, animate
+from .plotting import plot, Plotter, animate, scatter
 from .evaluation import compute_min_and_max

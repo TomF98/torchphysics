@@ -1,9 +1,9 @@
 import torch
 
-from .differentialoperators import (laplacian,
-                                    jac,
-                                    grad,
-                                    convective)
+from ..differentialoperators import (laplacian,
+                                     jac,
+                                     grad,
+                                     convective)
 
 
 class HeatEquation(torch.nn.Module):
