@@ -93,7 +93,7 @@ class Solver(pl.LightningModule):
             **self.optimizer_setting.scheduler_args['args']
         )
         lr_scheduler = {'scheduler': lr_scheduler, 'name': 'learning_rate', 
-                        'interval': 'epoch', 'frequency': 1}
+                        'interval': 'step', 'frequency': 1}
         for input_name in self.optimizer_setting.scheduler_args:
             if not input_name == 'args':
                 lr_scheduler[input_name] = self.optimizer_setting.scheduler_args[input_name]
