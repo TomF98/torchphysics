@@ -30,30 +30,31 @@ class RandomUniformSampler(PointSampler):
         super().__init__(n_points=n_points, density=density, filter_fn=filter_fn)
         self.domain = domain
 
-    def _sample_points(self, params=Points.empty()):
+    def _sample_points(self, params=Points.empty(), device='cpu'):
         if self.n_points:
             rand_points = self.domain.sample_random_uniform(self.n_points,
-                                                            params=params)
+                                                            params=params, 
+                                                            device=device)
             repeated_params = self._repeat_params(params, len(self))
             return rand_points.join(repeated_params)
         else: # density is used
             sample_function = self.domain.sample_random_uniform
             if any(var in self.domain.necessary_variables for \
                     var in params.space.keys()):
-                return self._sample_params_dependent(sample_function, params)
-            return self._sample_params_independent(sample_function, params)
+                return self._sample_params_dependent(sample_function, params, device)
+            return self._sample_params_independent(sample_function, params, device)
 
-    def _sample_points_with_filter(self, params=Points.empty()):
+    def _sample_points_with_filter(self, params=Points.empty(), device='cpu'):
         if self.n_points:
-            sample_points = self._sample_n_points_with_filter(params)
+            sample_points = self._sample_n_points_with_filter(params, device)
         else:
             # for density sampling, just sample normally and afterwards remove all 
             # points that are not allowed
-            sample_points = self._sample_points(params)
+            sample_points = self._sample_points(params, device)
             sample_points = self._apply_filter(sample_points)
         return sample_points
 
-    def _sample_n_points_with_filter(self, params):
+    def _sample_n_points_with_filter(self, params, device):
         sample_function = self.domain.sample_random_uniform
         num_of_params = max(1, len(params))
         sample_points = None
@@ -64,7 +65,8 @@ class RandomUniformSampler(PointSampler):
             # we have to make sure to sample for each param exactly n points
             while num_of_new_points < self.n_points:
                 # sample points
-                new_points = self._sample_for_ith_param(sample_function, params, i)
+                new_points = self._sample_for_ith_param(sample_function, params,
+                                                        i, device)
                 # apply filter and save valid points
                 new_points = self._apply_filter(new_points)
                 num_of_new_points += len(new_points)
@@ -111,7 +113,7 @@ class GaussianSampler(PointSampler):
         assert len(self.mean) == self.domain.dim, \
             f"""Dimension of mean: {self.mean}, does not fit the domain.""" 
 
-    def _sample_points(self, params=Points.empty()):
+    def _sample_points(self, params=Points.empty(), device='cpu'):
         num_of_params = max(1, len(params))
         sample_points = None
         torch_dis = torch.distributions.normal.Normal(loc=self.mean, scale=self.std)
@@ -121,7 +123,7 @@ class GaussianSampler(PointSampler):
             ith_params = params[i, ]
             repeat_params = self._repeat_params(ith_params, len(self))
             while current_num_of_points < self.n_points:
-                new_points = torch_dis.sample((self.n_points,))
+                new_points = torch_dis.sample((self.n_points,)).to(device)
                 new_points = Points(new_points, self.domain.space)
                 new_points = new_points.join(repeat_params)
                 new_points = self._check_inside_domain(new_points)
@@ -162,26 +164,27 @@ class LHSSampler(PointSampler):
         super().__init__(n_points=n_points)
         self.domain = domain
 
-    def _sample_points(self, params=Points.empty()):
+    def _sample_points(self, params=Points.empty(), device='cpu'):
         num_of_params = max(1, len(params))
         sample_points = None
         for i in range(num_of_params):
             ith_params = params[i, ]
             bounding_box = self.domain.bounding_box(ith_params)
-            lhs_in_box = self._create_lhs_in_bounding_box(bounding_box)
+            lhs_in_box = self._create_lhs_in_bounding_box(bounding_box, device)
             new_points = self._check_lhs_inside(lhs_in_box, ith_params)
             final_points = self._append_random_points(new_points, ith_params)
             sample_points = self._set_sampled_points(sample_points, final_points)
         return sample_points
 
-    def _create_lhs_in_bounding_box(self, bounding_box):
-        lhs_points = torch.zeros((self.n_points, self.domain.dim))
+    def _create_lhs_in_bounding_box(self, bounding_box, device):
+        lhs_points = torch.zeros((self.n_points, self.domain.dim), device=device)
         # for each axis apply the lhs strategy
         for i in range(self.domain.dim):
             axis_grid = torch.linspace(bounding_box[2*i], bounding_box[2*i+1], 
-                                       steps=self.n_points+1)[:-1] # dont need endpoint
+                                       steps=self.n_points+1, device=device)[:-1] # dont need endpoint
             axis_length = bounding_box[2*i+1] - bounding_box[2*i]
-            random_shift = axis_length/self.n_points * torch.rand(self.n_points)
+            random_shift = axis_length/self.n_points * torch.rand(self.n_points,
+                                                                  device=device)
             axis_points = torch.add(axis_grid, random_shift)
             # change order of points, to get 'lhs-grid' at the end
             permutation = torch.randperm(self.n_points)
