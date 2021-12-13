@@ -160,8 +160,8 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         return self.sample_random_uniform(n=n, d=d, params=params, device=device)
 
-    def normal(self, points, params=Points.empty(), devcie='cpu'):
-        points = torch.ones((self.len_of_params(points.join(params)), 1), device=devcie)
+    def normal(self, points, params=Points.empty(), device='cpu'):
+        points = torch.ones((self.len_of_params(points.join(params)), 1), device=device)
         return points * self.normal_vec
 
     def _get_volume(self, params=Points.empty()):

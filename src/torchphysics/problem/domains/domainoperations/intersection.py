@@ -143,7 +143,7 @@ class IntersectionBoundaryDomain(BoundaryDomain):
         if n:
             return _boundary_grid_with_n(self, self.domain.domain_a, 
                                          self.domain.domain_b, n, params, 
-                                         devcie=device)
+                                         device=device)
         return self._sample_grid_with_d(d, params, device)
 
     def _sample_grid_with_d(self, d, params=Points.empty(), device='cpu'):
