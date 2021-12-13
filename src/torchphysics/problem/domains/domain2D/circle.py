@@ -50,7 +50,7 @@ class Circle(Domain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self._compute_center_and_radius(params)
+        center, radius = self._compute_center_and_radius(params, device=device)
         num_of_params = self.len_of_params(params)
         r = torch.sqrt(torch.rand((num_of_params, n, 1), device=device))
         r *= radius
@@ -64,7 +64,7 @@ class Circle(Domain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self._compute_center_and_radius(params)
+        center, radius = self._compute_center_and_radius(params, device)
         num_of_params = self.len_of_params(params)
         grid = self._equidistant_points_in_circle(n, device=device)
         grid = grid.repeat(num_of_params, 1).view(num_of_params, n, 2) 
@@ -72,9 +72,9 @@ class Circle(Domain):
         points += center[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def _compute_center_and_radius(self, params=Points.empty()):
-        center = self.center(params).reshape(-1, 2)
-        radius = self.radius(params)
+    def _compute_center_and_radius(self, params=Points.empty(), device='cpu'):
+        center = self.center(params, device=device).reshape(-1, 2)
+        radius = self.radius(params, device=device)
         return center,radius
 
     def _equidistant_points_in_circle(self, n, device):
@@ -114,7 +114,7 @@ class CircleBoundary(BoundaryDomain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self.domain._compute_center_and_radius(params)
+        center, radius = self.domain._compute_center_and_radius(params, device)
         phi = 2 * np.pi * torch.rand((self.len_of_params(params), n, 1), device=device)
         points = torch.cat((torch.multiply(radius, torch.cos(phi)),
                             torch.multiply(radius, torch.sin(phi))), 
@@ -125,7 +125,7 @@ class CircleBoundary(BoundaryDomain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self.domain._compute_center_and_radius(params)
+        center, radius = self.domain._compute_center_and_radius(params, device)
         num_of_params = self.len_of_params(params)
         grid = torch.linspace(0, 2*np.pi, n+1, device=device)[:-1] # last one would be double
         phi = grid.repeat(num_of_params).view(num_of_params, n, 1) 
@@ -136,9 +136,9 @@ class CircleBoundary(BoundaryDomain):
         return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
-        center, radius = self.domain._compute_center_and_radius(points.join(params))
+        center, radius = self.domain._compute_center_and_radius(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
-        normal = (points - center).to(device)
+        normal = (points - center)
         return torch.divide(normal[:, None], radius).reshape(-1, 2)
 
     def _get_volume(self, params=Points.empty()):

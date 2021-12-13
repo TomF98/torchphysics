@@ -51,10 +51,10 @@ class Parallelogram(Domain):
         volume = dir_1[:, :1] * dir_2[:, 1:] - dir_1[:, 1:] * dir_2[:, :1]
         return volume
 
-    def _construct_parallelogram(self, params=Points.empty()):
-        origin = self.origin(params).reshape(-1, 2)
-        corner_1 = self.corner_1(params).reshape(-1, 2)
-        corner_2 = self.corner_2(params).reshape(-1, 2)
+    def _construct_parallelogram(self, params=Points.empty(), device='cpu'):
+        origin = self.origin(params, device).reshape(-1, 2)
+        corner_1 = self.corner_1(params, device).reshape(-1, 2)
+        corner_2 = self.corner_2(params, device).reshape(-1, 2)
         dir_1 = corner_1 - origin
         dir_2 = corner_2 - origin
         return origin, corner_1, corner_2, dir_1, dir_2
@@ -97,7 +97,7 @@ class Parallelogram(Domain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(params)
+        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(params, device)
         num_of_params = self.len_of_params(params)
         bary_coords = torch.rand((num_of_params, n, 2), device=device)
         points_in_dir_1 = bary_coords[:, :, :1] * dir_1[:, None]
@@ -109,7 +109,7 @@ class Parallelogram(Domain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(params)
+        origin, _, _, dir_1, dir_2 = self._construct_parallelogram(params, device)
         bary_coords = self._compute_barycentric_grid(n, dir_1, dir_2, device)
         if not d: 
             # if the number of points is specified we have to be sure to sample
@@ -176,7 +176,7 @@ class ParallelogramBoundary(BoundaryDomain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params)
+        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params, device)
         side_1, side_2, total_length = self._compute_side_length(dir_1, dir_2)
         num_of_params = self.len_of_params(params)
         points = torch.zeros((num_of_params, n, 2), device=device)
@@ -202,7 +202,7 @@ class ParallelogramBoundary(BoundaryDomain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params)
+        origin, _, _, dir_1, dir_2 = self.domain._construct_parallelogram(params, device)
         side_1, side_2, total_length = self._compute_side_length(dir_1, dir_2)
         num_of_params = self.len_of_params(params)
         points = torch.zeros((num_of_params, n, 2), device=device)
@@ -229,7 +229,7 @@ class ParallelogramBoundary(BoundaryDomain):
 
     def normal(self, points, params=Points.empty(), device='cpu'):
         origin, _, _, dir_1, dir_2 = \
-            self.domain._construct_parallelogram(points.join(params))
+            self.domain._construct_parallelogram(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
         normals = torch.zeros_like(points, device=device)
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, dir_2)

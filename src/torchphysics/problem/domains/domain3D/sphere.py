@@ -30,9 +30,9 @@ class Sphere(Domain):
         new_radius = self.radius.partially_evaluate(**data)
         return Sphere(space=self.space, center=new_center, radius=new_radius)
 
-    def _compute_center_and_radius(self, params=Points.empty()):
-        center = self.center(params).reshape(-1, 3)
-        radius = self.radius(params)
+    def _compute_center_and_radius(self, params=Points.empty(), device='cpu'):
+        center = self.center(params, device).reshape(-1, 3)
+        radius = self.radius(params, device)
         return center,radius
 
     def _contains(self, points, params=Points.empty()):
@@ -60,7 +60,7 @@ class Sphere(Domain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self._compute_center_and_radius(params)
+        center, radius = self._compute_center_and_radius(params, device)
         num_of_params = self.len_of_params(params)
         # take cubic root to stay uniform
         r = torch.pow(torch.rand((num_of_params, n, 1), device=device), 1/3.0)
@@ -82,7 +82,7 @@ class Sphere(Domain):
         if n > 10:
             # for to small n the sampling in the box is not stable,
             # in this case only use random points.
-            center, radius = self._compute_center_and_radius(params)
+            center, radius = self._compute_center_and_radius(params, device)
             points = self._point_grid_in_box(n, radius.item(), device)
             points_inside = self._get_points_inside(points, radius.item())
             points_inside += center
@@ -137,7 +137,7 @@ class SphereBoundary(BoundaryDomain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self.domain._compute_center_and_radius(params)
+        center, radius = self.domain._compute_center_and_radius(params, device)
         num_of_params = self.len_of_params(params)
         phi = 2 * np.pi * torch.rand((num_of_params, n, 1), device=device)
         theta = torch.rand((num_of_params, n, 1), device=device)
@@ -152,7 +152,7 @@ class SphereBoundary(BoundaryDomain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        center, radius = self.domain._compute_center_and_radius(params)
+        center, radius = self.domain._compute_center_and_radius(params, device)
         # From: https://stackoverflow.com/questions/9600801/
         # evenly-distributing-n-points-on-a-sphere
         points = []
@@ -171,7 +171,7 @@ class SphereBoundary(BoundaryDomain):
         return Points(points, self.space)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
-        center, radius = self.domain._compute_center_and_radius(points.join(params))
+        center, radius = self.domain._compute_center_and_radius(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
         normal = points - center
         return torch.divide(normal[:, None], radius).reshape(-1, 3)

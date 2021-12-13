@@ -42,8 +42,8 @@ class Interval(Domain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        lb = self.lower_bound(params)
-        ub = self.upper_bound(params)
+        lb = self.lower_bound(params, device=device)
+        ub = self.upper_bound(params, device=device)
         points = torch.rand((self.len_of_params(params), n, 1), device=device)
         points *= (ub - lb)
         points += lb
@@ -52,8 +52,8 @@ class Interval(Domain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        lb = self.lower_bound(params)
-        ub = self.upper_bound(params)
+        lb = self.lower_bound(params, device=device)
+        ub = self.upper_bound(params, device=device)
         points = torch.linspace(0, 1, n+2, device=device)[1:-1, None]
         points = (ub - lb) * points 
         points += lb
@@ -104,8 +104,8 @@ class IntervalBoundary(BoundaryDomain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        lb = self.domain.lower_bound(params).to(device)
-        ub = self.domain.upper_bound(params).to(device)
+        lb = self.domain.lower_bound(params, device=device)
+        ub = self.domain.upper_bound(params, device=device)
         rand_side = torch.rand((self.len_of_params(params), n, 1), device=device)
         random_boundary_index = rand_side < 0.5 
         points = torch.where(random_boundary_index, lb, ub)
@@ -114,8 +114,8 @@ class IntervalBoundary(BoundaryDomain):
     def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        lb = self.domain.lower_bound(params).to(device)
-        ub = self.domain.upper_bound(params).to(device)
+        lb = self.domain.lower_bound(params, device)
+        ub = self.domain.upper_bound(params, device)
         b_index = torch.tensor([0, 1], dtype=bool, device=device).repeat(int(n/2.0) + 1)
         points = torch.where(b_index[:n], lb, ub)
         return Points(points.reshape(-1, self.space.dim), self.space)
@@ -152,7 +152,7 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
                               device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        side = self.side(params)
+        side = self.side(params, device=device)
         points = torch.ones((self.len_of_params(params), n, 1), device=device)
         points *= side
         return Points(points.reshape(-1, self.space.dim), self.space)

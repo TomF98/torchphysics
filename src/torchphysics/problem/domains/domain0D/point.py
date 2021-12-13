@@ -63,7 +63,7 @@ class Point(Domain):
     def sample_random_uniform(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        point_params = self.point(params)
+        point_params = self.point(params, device=device)
         points = torch.ones((self.len_of_params(params), n, self.space.dim),
                             device=device)
         points *= point_params
