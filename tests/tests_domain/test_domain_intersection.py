@@ -112,8 +112,7 @@ def test_sample_random_uniform_in_intersection_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 & P2
-    with pytest.raises(NotImplementedError):
-        P.sample_random_uniform(n=10)
+
 
 
 def test_sample_random_uniform_in_intersection_with_d():
@@ -138,8 +137,7 @@ def test_sample_grid_in_intersection_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 & P2
-    with pytest.raises(NotImplementedError):
-        P.sample_grid(n=10)
+
 
 
 def test_sample_grid_in_intersection_with_d():
@@ -257,8 +255,7 @@ def test_sample_random_uniform_in_intersection_boundary_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = (P1 & P2)
-    with pytest.raises(NotImplementedError):
-        P.boundary.sample_random_uniform(n=10)
+
 
 
 def test_sample_random_uniform_in_intersection_boundary_with_d():
@@ -281,8 +278,7 @@ def test_sample_grid_in_intersection_boundary_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 & P2
-    with pytest.raises(NotImplementedError):
-        P.boundary.sample_grid(n=10)
+
 
 
 def test_sample_grid_in_intersection_boundary_with_d():

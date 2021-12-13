@@ -160,31 +160,32 @@ class TrimeshPolyhedron(Domain):
         n *= num_of_params
         return n
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(),
+                              device='cpu'):
         n = self._compute_number_of_points(n, d, params)
-        points = torch.empty((0, self.dim))
+        points = torch.empty((0, self.dim), device=device)
         computed_points = 0
         while computed_points < n:
             new_points = trimesh.sample.volume_mesh(self.mesh, n-computed_points)
-            points = torch.cat((points, torch.tensor(new_points)), dim=0)
+            points = torch.cat((points, torch.tensor(new_points, device=device)),dim=0)
             computed_points += len(new_points)
         return Points(points, self.space)
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         n = self._compute_number_of_points(n, d, params)
         bounds = self.bounding_box(params)
-        points = self._point_grid_in_bounding_box(n, bounds)
+        points = self._point_grid_in_bounding_box(n, bounds, device)
         points_inside = self._get_points_inside(points)
-        final_points = Sphere._append_random(self, points_inside, n, params)
+        final_points = Sphere._append_random(self, points_inside, n, params, device)
         return Points(final_points, self.space)
 
-    def _point_grid_in_bounding_box(self, n, bounds):
+    def _point_grid_in_bounding_box(self, n, bounds, device):
         b_box_volume = self._get_bounding_box_volume(bounds)
         volume = self._get_volume().item()
         scaled_n = int(np.ceil(np.cbrt(n*b_box_volume/volume)))
-        x_axis = torch.linspace(bounds[0], bounds[1], scaled_n)
-        y_axis = torch.linspace(bounds[2], bounds[3], scaled_n)
-        z_axis = torch.linspace(bounds[4], bounds[5], scaled_n)
+        x_axis = torch.linspace(bounds[0], bounds[1], scaled_n, device=device)
+        y_axis = torch.linspace(bounds[2], bounds[3], scaled_n, device=device)
+        z_axis = torch.linspace(bounds[4], bounds[5], scaled_n, device=device)
         points = torch.stack(torch.meshgrid(x_axis, y_axis, z_axis)).T
         return points.reshape(-1, 3)
 
@@ -221,24 +222,25 @@ class TrimeshBoundary(BoundaryDomain):
         area = sum(self.domain.mesh.area_faces)
         return torch.tensor(area).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         n = self.domain._compute_number_of_points(n, d, params)
         points = trimesh.sample.sample_surface(self.domain.mesh, n)[0]
-        tensor_points = torch.tensor(points)
+        tensor_points = torch.tensor(points, device=device)
         return Points(tensor_points, self.space)
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         n = self.domain._compute_number_of_points(n, d, params)
         points = trimesh.sample.sample_surface_even(self.domain.mesh, n)[0]
-        points = torch.tensor(points)
-        points = Sphere._append_random(self, points, n, params)
+        points = torch.tensor(points, device=device)
+        points = Sphere._append_random(self, points, n, params, device)
         return Points(points, self.space)
 
-    def normal(self, points, params=Points.empty()):
+    def normal(self, points, params=Points.empty(), device='cpu'):
         points = points.as_tensor
         index = self.domain.mesh.nearest.on_surface(points)[2]
-        mesh_normals = torch.tensor(self.domain.mesh.face_normals)
-        normals = torch.zeros((len(points), 3))
+        mesh_normals = torch.tensor(self.domain.mesh.face_normals, device=device)
+        normals = torch.zeros((len(points), 3), device=device)
         for i in range(len(points)):
             normals[i, :] = mesh_normals[index[i]]
         return normals

@@ -806,7 +806,7 @@ def test_triangle_boundary_volume():
 def test_triangle_fill_up_missing_grid():
     T = Triangle(R2('x'), [0, 0], [2, 0], [0, 1])
     points = torch.tensor([[1.0, 2.0], [2.0, 2.0]])
-    points = T._grid_has_n_points(5, points)
+    points = T._grid_has_n_points(5, points, device='cpu')
     assert points.shape == (5, 2)
 
 

@@ -191,7 +191,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         """Greates a equdistant grid in the domain.
 
         Parameters
@@ -203,6 +203,9 @@ class Domain:
             n is not defined.
         params : torchphysics.problem.Points, optional
             Additional paramters that are maybe needed to evaluate the domain.
+        device : str
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------
@@ -212,7 +215,8 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(),
+                              device='cpu'):
         """Greates a random uniform points in the domain.
 
         Parameters
@@ -224,6 +228,9 @@ class Domain:
             n is not defined.
         params : torchphysics.problem.Points, optional
             Additional paramters that are maybe needed to evaluate the domain.
+        device : str
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------
@@ -281,7 +288,7 @@ class BoundaryDomain(Domain):
         return self.domain.bounding_box(params)
 
     @abc.abstractmethod
-    def normal(self, points, params=Points.empty()):
+    def normal(self, points, params=Points.empty(), device='cpu'):
         """Computes the normal vector at each point in points.
 
         Parameters
@@ -292,6 +299,9 @@ class BoundaryDomain(Domain):
             E.g in 2D: points = Points(torch.tensor([[2, 4], [9, 6], ....]), R2(...))        
         params : torchphysics.problem.Points, optional
             Additional paramters that are maybe needed to evaluate the domain.
+        device : str
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------

@@ -3,7 +3,7 @@ import torch
 
 from ..domain import Domain, BoundaryDomain
 from ...spaces import Points
-from .sampler_helper import _boundary_grid_with_n
+from .sampler_helper import _boundary_grid_with_n, _boundary_random_with_n
 
 
 class UnionDomain(Domain):
@@ -56,16 +56,17 @@ class UnionDomain(Domain):
             bounds.append(max([bounds_a[2*i+1], bounds_b[2*i+1]]))
         return bounds
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         if n:
-            return self._sample_random_with_n(n, params)
+            return self._sample_random_with_n(n, params, device)
         # esle d not None
-        return self._sample_random_with_d(d, params)
+        return self._sample_random_with_d(d, params, device)
 
-    def _sample_random_with_n(self, n, params=Points.empty()):
+    def _sample_random_with_n(self, n, params=Points.empty(), device='cpu'):
         # sample n points in both domains
-        points_a = self.domain_a.sample_random_uniform(n=n, params=params)
-        points_b = self.domain_b.sample_random_uniform(n=n, params=params)
+        points_a = self.domain_a.sample_random_uniform(n=n, params=params, device=device)
+        points_b = self.domain_b.sample_random_uniform(n=n, params=params, device=device)
         # check which points of domain b are in domain a
         _, repeated_params = self._repeat_params(n, params)
         in_a = self.domain_a._contains(points=points_b, params=repeated_params)
@@ -75,15 +76,15 @@ class UnionDomain(Domain):
         volume_ratio = torch.divide(volume_a, volume_approx)
         # choose points depending of the proportion of the domain w.r.t. the
         # whole domain union
-        rand_index = torch.rand((max(n, len(repeated_params)), 1))
+        rand_index = torch.rand((max(n, len(repeated_params)), 1), device=device)
         rand_index = torch.logical_or(in_a, rand_index <= volume_ratio)
         points = torch.where(rand_index, points_a, points_b)                
         return Points(points, self.space)
 
-    def _sample_random_with_d(self, d, params=Points.empty()):
+    def _sample_random_with_d(self, d, params=Points.empty(), device='cpu'):
         # sample n points in both domains
-        points_a = self.domain_a.sample_random_uniform(d=d, params=params)
-        points_b = self.domain_b.sample_random_uniform(d=d, params=params)      
+        points_a = self.domain_a.sample_random_uniform(d=d, params=params, device=device)
+        points_b = self.domain_b.sample_random_uniform(d=d, params=params, device=device)      
         return self._append_points(points_a, points_b, params)
 
     def _append_points(self, points_a, points_b, params=Points.empty()):
@@ -100,32 +101,33 @@ class UnionDomain(Domain):
         in_a = domain._contains(points=points, params=repeated_params)
         return in_a
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if n:
-            return self._sample_grid_with_n(n, params)
+            return self._sample_grid_with_n(n, params, device)
         # else d not None
-        return self._sample_grid_with_d(d, params)
+        return self._sample_grid_with_d(d, params, device)
 
-    def _sample_grid_with_n(self, n, params=Points.empty()):
+    def _sample_grid_with_n(self, n, params=Points.empty(), device='cpu'):
         volume_approx, volume_a, _ = self._get_volume(return_value_of_a_b=True,
                                                       params=params)
         scaled_n = int(torch.ceil(n * volume_a/volume_approx))
-        points_a = self.domain_a.sample_grid(n=scaled_n, params=params)
+        points_a = self.domain_a.sample_grid(n=scaled_n, params=params, 
+                                             device=device)
         if n - scaled_n > 0:
-            return self._sample_in_b(n, params, points_a)
+            return self._sample_in_b(n, params, points_a, device)
         return points_a
 
-    def _sample_in_b(self, n, params, points_a):
+    def _sample_in_b(self, n, params, points_a, device):
         # check how many points from domain a lay in b, these points will not be used!
         in_b = self._points_lay_in_other_domain(points_a, self.domain_b, params)
         index = torch.where(torch.logical_not(in_b))[0]
         scaled_n = n - len(index)
-        points_b = self.domain_b.sample_grid(n=scaled_n, params=params)
+        points_b = self.domain_b.sample_grid(n=scaled_n, params=params, device=device)
         return points_a[index, ] | points_b
 
-    def _sample_grid_with_d(self, d, params=Points.empty()):
-        points_a = self.domain_a.sample_grid(d=d, params=params)
-        points_b = self.domain_b.sample_grid(d=d, params=params)      
+    def _sample_grid_with_d(self, d, params=Points.empty(), device='cpu'):
+        points_a = self.domain_a.sample_grid(d=d, params=params, device=device)
+        points_b = self.domain_b.sample_grid(d=d, params=params, device=device)      
         return self._append_points(points_a, points_b, params)
 
     @property
@@ -160,19 +162,22 @@ class UnionBoundaryDomain(BoundaryDomain):
         volume_b = self.domain.domain_b.boundary.volume(params)
         return volume_a + volume_b
     
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         if n:
-            raise NotImplementedError("""Sampling in a Union-Domain with given
-                                         number of points n is not implemented, 
-                                         please use a density.""")
-        return self._sample_random_with_d(d, params)
+            return _boundary_random_with_n(self, self.domain.domain_a, 
+                                           self.domain.domain_b, n, params, 
+                                           device)
+        return self._sample_random_with_d(d, params, device)
 
-    def _sample_random_with_d(self, d, params=Points.empty()):
+    def _sample_random_with_d(self, d, params=Points.empty(), device='cpu'):
         points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d,
-                                                                       params=params)
+                                                                       params=params, 
+                                                                       device=device)
         points_a = self._delete_points_in_b(points_a, params)
         points_b = self.domain.domain_b.boundary.sample_random_uniform(d=d,
-                                                                       params=params)  
+                                                                       params=params, 
+                                                                       device=device)  
         points_b = self._delete_inner_points(points_b, self.domain.domain_a, params)     
         return points_a | points_b    
 
@@ -190,22 +195,25 @@ class UnionBoundaryDomain(BoundaryDomain):
         index = torch.where(torch.logical_not(inside))[0]
         return points[index, ]
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if n:
             return _boundary_grid_with_n(self, self.domain.domain_a, 
-                                         self.domain.domain_b, n, params)
-        return self._sample_grid_with_d(d, params)
+                                         self.domain.domain_b, n, params, 
+                                         device)
+        return self._sample_grid_with_d(d, params, device)
 
-    def _sample_grid_with_d(self, d, params=Points.empty()):
-        points_a = self.domain.domain_a.boundary.sample_grid(d=d, params=params)
+    def _sample_grid_with_d(self, d, params=Points.empty(), device='cpu'):
+        points_a = self.domain.domain_a.boundary.sample_grid(d=d, params=params, 
+                                                             device=device)
         points_a = self._delete_points_in_b(points_a, params)
-        points_b = self.domain.domain_b.boundary.sample_grid(d=d, params=params)  
+        points_b = self.domain.domain_b.boundary.sample_grid(d=d, params=params, 
+                                                             device=device)  
         points_b = self._delete_inner_points(points_b, self.domain.domain_a, params)     
         return points_a | points_b    
 
-    def normal(self, points, params=Points.empty()):
-        a_normals = self.domain.domain_a.boundary.normal(points, params)
-        b_normals = self.domain.domain_b.boundary.normal(points, params)
+    def normal(self, points, params=Points.empty(), device='cpu'):
+        a_normals = self.domain.domain_a.boundary.normal(points, params, device)
+        b_normals = self.domain.domain_b.boundary.normal(points, params, device)
         on_a = self.domain.domain_a.boundary._contains(points, params)
         normals = torch.where(on_a, a_normals, b_normals)
         return normals

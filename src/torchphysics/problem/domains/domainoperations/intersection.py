@@ -4,7 +4,7 @@ import torch
 from ..domain import Domain, BoundaryDomain
 from ...spaces import Points
 from .sampler_helper import (_boundary_grid_with_n, _inside_grid_with_n, 
-                             _inside_random_with_n)
+                             _inside_random_with_n, _boundary_random_with_n)
 
 
 class IntersectionDomain(Domain):
@@ -51,14 +51,16 @@ class IntersectionDomain(Domain):
             bounds.append(min([bounds_a[2*i+1], bounds_b[2*i+1]]))
         return bounds
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         if n:
             return _inside_random_with_n(self, self.domain_a, self.domain_b, 
-                                         n=n, params=params, invert=False)
-        return self._sample_random_with_d(d, params)
+                                         n=n, params=params, invert=False,
+                                         device=device)
+        return self._sample_random_with_d(d, params, device)
 
-    def _sample_random_with_d(self, d, params=Points.empty()):
-        points_a = self.domain_a.sample_random_uniform(d=d, params=params)
+    def _sample_random_with_d(self, d, params=Points.empty(), device='cpu'):
+        points_a = self.domain_a.sample_random_uniform(d=d, params=params, device=device)
         return self._cut_points(points_a, params)
 
     def _cut_points(self, points, params=Points.empty()):
@@ -69,14 +71,15 @@ class IntersectionDomain(Domain):
         index = torch.where(in_b)[0]
         return points[index, ]
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if n:
             return _inside_grid_with_n(self, self.domain_a, self.domain_b, 
-                                       n=n, params=params, invert=False)
-        return self._sample_grid_with_d(d, params)
+                                       n=n, params=params, invert=False, 
+                                       device=device)
+        return self._sample_grid_with_d(d, params, device)
 
-    def _sample_grid_with_d(self, d, params=Points.empty()):
-        points_a = self.domain_a.sample_grid(d=d, params=params)
+    def _sample_grid_with_d(self, d, params=Points.empty(), device='cpu'):
+        points_a = self.domain_a.sample_grid(d=d, params=params, device=device)
         return  self._cut_points(points_a, params)
 
     @property
@@ -109,18 +112,23 @@ class IntersectionBoundaryDomain(BoundaryDomain):
         volume_b = self.domain.domain_b.boundary.volume(params)
         return volume_a + volume_b
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(),
+                              device='cpu'):
         if n:
-            raise NotImplementedError
-        return self._sample_random_with_d(d, params)
+            return _boundary_random_with_n(self, self.domain.domain_a, 
+                                           self.domain.domain_b, n, params, 
+                                           device=device)
+        return self._sample_random_with_d(d, params, device)
 
 
-    def _sample_random_with_d(self, d, params=Points.empty()):
+    def _sample_random_with_d(self, d, params=Points.empty(), device='cpu'):
         points_a = self.domain.domain_a.boundary.sample_random_uniform(d=d,
-                                                                       params=params)
+                                                                       params=params, 
+                                                                       device=device)
         points_a = self._delete_outer_points(points_a, self.domain.domain_b, params) 
         points_b = self.domain.domain_b.boundary.sample_random_uniform(d=d,
-                                                                       params=params)  
+                                                                       params=params, 
+                                                                       device=device)  
         points_b = self._delete_outer_points(points_b, self.domain.domain_a, params)     
         return points_a | points_b 
 
@@ -131,22 +139,25 @@ class IntersectionBoundaryDomain(BoundaryDomain):
         index = torch.where(inside)[0]
         return points[index, ]
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if n:
             return _boundary_grid_with_n(self, self.domain.domain_a, 
-                                         self.domain.domain_b, n, params)
-        return self._sample_grid_with_d(d, params)
+                                         self.domain.domain_b, n, params, 
+                                         devcie=device)
+        return self._sample_grid_with_d(d, params, device)
 
-    def _sample_grid_with_d(self, d, params=Points.empty()):
-        points_a = self.domain.domain_a.boundary.sample_grid(d=d, params=params)
+    def _sample_grid_with_d(self, d, params=Points.empty(), device='cpu'):
+        points_a = self.domain.domain_a.boundary.sample_grid(d=d, params=params, 
+                                                             device=device)
         points_a = self._delete_outer_points(points_a, self.domain.domain_b, params) 
-        points_b = self.domain.domain_b.boundary.sample_grid(d=d, params=params)  
+        points_b = self.domain.domain_b.boundary.sample_grid(d=d, params=params, 
+                                                             device=device)  
         points_b = self._delete_outer_points(points_b, self.domain.domain_a, params)     
         return points_a | points_b    
 
-    def normal(self, points, params=Points.empty()):
-        a_normals = self.domain.domain_a.boundary.normal(points, params)
-        b_normals = self.domain.domain_b.boundary.normal(points, params)
+    def normal(self, points, params=Points.empty(), device='cpu'):
+        a_normals = self.domain.domain_a.boundary.normal(points, params, device)
+        b_normals = self.domain.domain_b.boundary.normal(points, params, device)
         on_a = self.domain.domain_a.boundary._contains(points, params)
         normals = torch.where(on_a, a_normals, b_normals)
         return normals

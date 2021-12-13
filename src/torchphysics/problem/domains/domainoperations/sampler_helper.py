@@ -6,7 +6,7 @@ import torch
 from torchphysics.problem.spaces.points import Points
 
 
-def _inside_random_with_n(main_domain, domain_a, domain_b, n, params, invert):
+def _inside_random_with_n(main_domain, domain_a, domain_b, n, params, invert, device):
     """Creates a random uniform points inside of a cut or intersection domain.
 
     Parameters
@@ -22,25 +22,28 @@ def _inside_random_with_n(main_domain, domain_a, domain_b, n, params, invert):
     invert : bool
         Says if the points should lay in the domain_b (intersection) or if
         not (cut). For the Cut-Domain it is invert=True.
+    device : str
+        The device on which the points should be created.
     """
     if n == 1: 
         return _random_points_if_n_eq_1(main_domain, domain_a, domain_b,
-                                        params, invert)
-    return _random_points_inside(main_domain, domain_a, domain_b, n, params, invert)
+                                        params, invert, device)
+    return _random_points_inside(main_domain, domain_a, domain_b, n,
+                                 params, invert, device)
 
 
-def _random_points_if_n_eq_1(main_domain, domain_a, domain_b, params, invert):
-    final_points = torch.zeros((len(params), main_domain.dim))
-    found_valid = torch.zeros((len(params), 1), dtype=bool) 
+def _random_points_if_n_eq_1(main_domain, domain_a, domain_b, params, invert, device):
+    final_points = torch.zeros((len(params), main_domain.dim), device=device)
+    found_valid = torch.zeros((len(params), 1), dtype=bool, device=device) 
     while not all(found_valid):
-        new_points = domain_a.sample_random_uniform(n=1, params=params)
+        new_points = domain_a.sample_random_uniform(n=1, params=params, device=device)
         index_valid = _check_in_b(domain_b, params, invert, new_points)
         found_valid[index_valid] = True
         final_points[index_valid] = new_points.as_tensor[index_valid]
     return Points(final_points, main_domain.space)
 
 
-def _random_points_inside(main_domain, domain_a, domain_b, n, params, invert):
+def _random_points_inside(main_domain, domain_a, domain_b, n, params, invert, device):
     num_of_params = max(len(params), 1)
     random_points = Points.empty()
     for i in range(num_of_params):
@@ -48,7 +51,9 @@ def _random_points_inside(main_domain, domain_a, domain_b, n, params, invert):
         number_valid = 0
         scaled_n = n
         while number_valid < n:
-            new_points = domain_a.sample_random_uniform(n=int(scaled_n), params=ith_params)
+            new_points = domain_a.sample_random_uniform(n=int(scaled_n),
+                                                        params=ith_params, 
+                                                        device=device)
             _, repeat_params = main_domain._repeat_params(len(new_points), ith_params)
             index_valid = _check_in_b(domain_b, repeat_params, invert, new_points)
             number_valid = len(index_valid)
@@ -57,7 +62,7 @@ def _random_points_inside(main_domain, domain_a, domain_b, n, params, invert):
     return random_points
 
 
-def _inside_grid_with_n(main_domain, domain_a, domain_b, n, params, invert):
+def _inside_grid_with_n(main_domain, domain_a, domain_b, n, params, invert, device):
     """Creates a point grid inside of a cut or intersection domain.
 
     Parameters
@@ -73,9 +78,11 @@ def _inside_grid_with_n(main_domain, domain_a, domain_b, n, params, invert):
     invert : bool
         Says if the points should lay in the domain_b (intersection) or if
         not (cut). For the Cut-Domain it is invert=True.
+    device : str
+        The device on which the points should be created.
     """
     # first sample grid inside the domain_a
-    grid_a = domain_a.sample_grid(n=n, params=params)
+    grid_a = domain_a.sample_grid(n=n, params=params, device=device)
     _, repeat_params = main_domain._repeat_params(n, params)
     index_valid = _check_in_b(domain_b, repeat_params, invert, grid_a)
     number_inside = len(index_valid)
@@ -83,15 +90,15 @@ def _inside_grid_with_n(main_domain, domain_a, domain_b, n, params, invert):
         return grid_a
     # if the grid does not fit, scale the number of points
     scaled_n = int(n**2 / number_inside)
-    grid_a = domain_a.sample_grid(n=scaled_n, params=params)
-    _, repeat_params = main_domain._repeat_params(n, params)
+    grid_a = domain_a.sample_grid(n=scaled_n, params=params, device=device)
+    _, repeat_params = main_domain._repeat_params(scaled_n, params)
     index_valid = _check_in_b(domain_b, repeat_params, invert, grid_a)
     grid_a = grid_a[index_valid, ]
     if len(grid_a) >= n:
         return grid_a[:n, ] 
     # add some random ones if still some missing
     rand_points = _random_points_inside(main_domain, domain_a, domain_b,
-                                        n-len(grid_a), params, invert)
+                                        n-len(grid_a), params, invert, device)
     return grid_a | rand_points
 
 
@@ -104,11 +111,33 @@ def _check_in_b(domain_b, params, invert, grid_a):
     return index
 
 
-def _boundary_random_with_n(main_domain, domain_a, domain_b, n, params):
-    pass
+def _boundary_random_with_n(main_domain, domain_a, domain_b, n, params, device):
+    if n == 1: 
+        return _random_points_if_n_eq_1(main_domain, domain_a, domain_b, params, device)
+    return _random_points_boundary(main_domain, domain_a, domain_b, n, params, device)
 
 
-def _boundary_grid_with_n(main_domain, domain_a, domain_b, n, params):
+def _random_points_boundary(main_domain, domain_a, domain_b, n, params, device):
+    num_of_params = max(len(params), 1)
+    random_points = Points.empty()
+    domains = [domain_a, domain_b]
+    for i in range(num_of_params):
+        ith_params = params[i, :]
+        ith_points = Points.empty()
+        use_b = False
+        while len(ith_points) < n:
+            new_points = domains[use_b].boundary.sample_random_uniform(n=n,
+                                                                       params=ith_params, 
+                                                                       device=device)
+            _, repeat_params = main_domain._repeat_params(len(new_points), ith_params)
+            index_valid = torch.where(main_domain._contains(new_points, repeat_params))
+            ith_points = ith_points | new_points[index_valid[0], ]
+            use_b = not use_b
+        random_points = random_points | new_points[:n, ]
+    return random_points
+
+
+def _boundary_grid_with_n(main_domain, domain_a, domain_b, n, params, device):
     """Creates a point grid on the boundary of a domain operation.
 
     Parameters
@@ -121,10 +150,12 @@ def _boundary_grid_with_n(main_domain, domain_a, domain_b, n, params):
         The number of points.
     params : Points
         Additional parameters for the domains.
+    device : str
+        The device on which the points should be created.
     """
     # first sample a grid on both boundaries
-    grid_a = domain_a.boundary.sample_grid(n=n, params=params)
-    grid_b = domain_b.boundary.sample_grid(n=n, params=params)  
+    grid_a = domain_a.boundary.sample_grid(n=n, params=params, device=device)
+    grid_b = domain_b.boundary.sample_grid(n=n, params=params, device=device)  
     # check how many points are on the boundary of the operation domain
     on_bound_a, on_bound_b, a_correct, b_correct = \
         _check_points_on_main_boundary(main_domain, grid_a, grid_b, params)
@@ -139,8 +170,8 @@ def _boundary_grid_with_n(main_domain, domain_a, domain_b, n, params):
     approx_surface = a_surface * a_correct / n + b_surface * b_correct / n
     scaled_a = int(n * a_surface / approx_surface) + 1 # round up  
     scaled_b = max(int(n * b_surface / approx_surface), 1) # round to floor, but not 0
-    grid_a = domain_a.boundary.sample_grid(n=scaled_a, params=params)
-    grid_b = domain_b.boundary.sample_grid(n=scaled_b, params=params)  
+    grid_a = domain_a.boundary.sample_grid(n=scaled_a, params=params, device=device)
+    grid_b = domain_b.boundary.sample_grid(n=scaled_b, params=params, device=device)  
     # check again how what points are correct and now just stay with this grid
     # if still some points are missing add random ones.
     on_bound_a, on_bound_b, a_correct, b_correct = \
@@ -148,7 +179,9 @@ def _boundary_grid_with_n(main_domain, domain_a, domain_b, n, params):
     final_grid = grid_a[on_bound_a, ] | grid_b[on_bound_b, ]
     if a_correct + b_correct >= n:
         return final_grid[:n, ]
-    return final_grid # add random points
+    rand_points = _random_points_boundary(main_domain, domain_a, domain_b,
+                                          n-len(grid_a), params, device)
+    return final_grid | rand_points
 
 
 def _check_points_on_main_boundary(main_domain, grid_a, grid_b, params):

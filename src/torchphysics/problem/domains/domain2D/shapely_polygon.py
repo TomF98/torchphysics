@@ -58,15 +58,16 @@ class ShapelyPolygon(Domain):
         volume = self.polygon.area
         return torch.tensor(volume).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         n = self._compute_number_of_points(n, d, params)
-        points = torch.empty((0, self.dim))
+        points = torch.empty((0, self.dim), device=device)
         big_t, biggest_area = None, 0
         # instead of using a bounding box it is more efficient to triangulate
         # the polygon and sample in each triangle.
         for t in s_ops.triangulate(self.polygon):
             scaled_n = int(t.area/self.polygon.area * n)
-            new_points = self._sample_in_triangulation(t, scaled_n)
+            new_points = self._sample_in_triangulation(t, scaled_n, device)
             if new_points is not None:
                 points = torch.cat((points, new_points), dim=0)
                 # remember the biggest triangle that was inside, if later
@@ -76,14 +77,14 @@ class ShapelyPolygon(Domain):
                     biggest_area = t.area
             if len(points) == n:
                 break
-        points = self._check_enough_points_sampled(n, points, big_t)
+        points = self._check_enough_points_sampled(n, points, big_t, device)
         return Points(points, self.space)
 
-    def _sample_in_triangulation(self, t, n):
+    def _sample_in_triangulation(self, t, n, device):
         (x0, y0), (x1, y1), (x2, y2), _ = t.exterior.coords
-        corners = torch.tensor([[x0, y0], [x1, y1], [x2, y2]])
+        corners = torch.tensor([[x0, y0], [x1, y1], [x2, y2]], device=device)
         if n > 0:
-            new_points = self._random_points_in_triangle(n, corners)
+            new_points = self._random_points_in_triangle(n, corners, device)
             # when the polygon has holes or is non convex, it can happen
             # that the triangle is not completly in the polygon
             if not t.within(self.polygon):
@@ -93,8 +94,8 @@ class ShapelyPolygon(Domain):
             return new_points
         return None
 
-    def _random_points_in_triangle(self, n, corners):
-        bary_coords = torch.rand((n, 2))
+    def _random_points_in_triangle(self, n, corners, device):
+        bary_coords = torch.rand((n, 2), device=device)
         # if a barycentric coordinates is bigger then 1, mirror them at the
         # point (0.5, 0.5). Stays uniform.
         index = torch.where(bary_coords.sum(axis=1) > 1)[0]
@@ -104,33 +105,33 @@ class ShapelyPolygon(Domain):
         axis_2 = torch.multiply(corners[2]-corners[0], bary_coords[:, 1:])
         return torch.add(torch.add(corners[0], axis_1), axis_2)
 
-    def _check_enough_points_sampled(self, n, points, big_t):
+    def _check_enough_points_sampled(self, n, points, big_t, device):
         # if not enough points are sampled, create some new points in the biggest
         # triangle
         while len(points) < n:
-            new_points = self._sample_in_triangulation(big_t, n-len(points))
+            new_points = self._sample_in_triangulation(big_t, n-len(points), device)
             points = torch.cat((points, new_points), dim=0)
         return points
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         n = self._compute_number_of_points(n, d, params)
-        points = self._create_points_in_bounding_box(n)
+        points = self._create_points_in_bounding_box(n, device)
         points = self._delete_outside(points)
         if not d:
             # if a number of points if specified we have to make sure
             # to sample the right amount of points
-            points = self._grid_enough_points(n, points)
+            points = self._grid_enough_points(n, points, device)
         return Points(points, self.space)
 
-    def _create_points_in_bounding_box(self, n):
+    def _create_points_in_bounding_box(self, n, device):
         bounds = self.bounding_box()
-        origin = torch.tensor([[bounds[0], bounds[2]]])
-        dir_1 = torch.tensor([[bounds[1]-bounds[0], 0]])
-        dir_2 = torch.tensor([[0, bounds[3]-bounds[2]]])
+        origin = torch.tensor([[bounds[0], bounds[2]]], device=device)
+        dir_1 = torch.tensor([[bounds[1]-bounds[0], 0]], device=device)
+        dir_2 = torch.tensor([[0, bounds[3]-bounds[2]]], device=device)
         b_box_volume = (bounds[1]-bounds[0])*(bounds[3]-bounds[2])
         scaled_n = int(n * b_box_volume/self.polygon.area)
         b_box_grid = Parallelogram._compute_barycentric_grid(self, scaled_n,
-                                                             dir_1, dir_2)
+                                                             dir_1, dir_2, device)
         points_in_dir_1 = b_box_grid[:, :1] * dir_1
         points_in_dir_2 = b_box_grid[:, 1:] * dir_2
         points = points_in_dir_1 + points_in_dir_2 + origin
@@ -141,11 +142,12 @@ class ShapelyPolygon(Domain):
         index = torch.where(inside)[0]
         return points[index]
 
-    def _grid_enough_points(self, n, bary_coords): 
+    def _grid_enough_points(self, n, bary_coords, device): 
         # if not enough points, add some random ones.
         points = bary_coords
         if len(bary_coords) < n:
-            random_points = self.sample_random_uniform(n=(n - len(bary_coords)))
+            random_points = self.sample_random_uniform(n=(n - len(bary_coords)),
+                                                       device=device)
             points = torch.cat((bary_coords, random_points.as_tensor),
                                 dim=0)
         return points
@@ -157,17 +159,18 @@ class ShapelyPolygon(Domain):
         n *= num_of_params
         return n
 
-    def outline(self):
+    def outline(self, device='cpu'):
         """Creates a outline of the domain.
+
         Returns
         -------
         list of list
             The vertices of the domain. Inner vertices are appended in there
             own list.
         """
-        cords = [torch.tensor(self.polygon.exterior.coords)]
+        cords = [torch.tensor(self.polygon.exterior.coords, device=device)]
         for i in self.polygon.interiors:
-            cords.append(torch.tensor(i.coords))
+            cords.append(torch.tensor(i.coords, device=device))
         return cords
 
     @property
@@ -189,7 +192,7 @@ class ShapelyBoundary(BoundaryDomain):
 
     def _contains(self, points, params=Points.empty()):
         points = points.as_tensor
-        on_bound = torch.empty(len(points), dtype=bool)
+        on_bound = torch.empty(len(points), dtype=bool, device=points.device)
         for i in range(len(points)):
             point = s_geo.Point(points[i])
             distance = self.domain.polygon.boundary.distance(point)
@@ -200,25 +203,27 @@ class ShapelyBoundary(BoundaryDomain):
         volume = self.domain.polygon.boundary.length 
         return torch.tensor(volume).reshape(-1, 1)
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         n = self.domain._compute_number_of_points(n, d, params)
-        line_points = torch.rand(n) * self.domain.polygon.boundary.length 
-        return self._transform_points_to_boundary(n, torch.sort(line_points).values)
+        line_points = torch.rand(n, device=device) * self.domain.polygon.boundary.length 
+        return self._transform_points_to_boundary(n, torch.sort(line_points).values, device)
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         n = self.domain._compute_number_of_points(n, d, params)
-        line_points = torch.linspace(0, self.domain.polygon.boundary.length, n+1)[:-1]
-        return self._transform_points_to_boundary(n, line_points)
+        line_points = torch.linspace(0, self.domain.polygon.boundary.length,
+                                     n+1, device=device)[:-1]
+        return self._transform_points_to_boundary(n, line_points, device)
 
-    def _transform_points_to_boundary(self, n, line_points):
+    def _transform_points_to_boundary(self, n, line_points, device):
         """Transform points that lay between 0 and polygon.boundary.length to 
         the surface of this polygon. The points have to be ordered from smallest
         to biggest.
         """
-        outline = self.domain.outline()
+        outline = self.domain.outline(device=device)
         index = 0
         current_length = 0
-        points = torch.zeros((n, 2))
+        points = torch.zeros((n, 2), device=device)
         for boundary_part in outline:
             points, index, current_length = \
                 self._distribute_line_to_boundary(points, index, line_points,
@@ -252,11 +257,11 @@ class ShapelyBoundary(BoundaryDomain):
                      (corners[corner_index+1] - corners[corner_index]))
         return new_point
 
-    def normal(self, points, params=Points.empty()):
+    def normal(self, points, params=Points.empty(), device='cpu'):
         points = points.as_tensor
-        outline = self.domain.outline()
+        outline = self.domain.outline(device=device)
         index = self._where_on_boundary(points, outline)
-        return self.normal_list[index]
+        return self.normal_list[index].to(device)
 
     def _compute_normals(self, outline):
         face_number = sum([len(corners) for corners in outline])
