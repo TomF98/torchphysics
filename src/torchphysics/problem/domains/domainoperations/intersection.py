@@ -3,6 +3,8 @@ import torch
 
 from ..domain import Domain, BoundaryDomain
 from ...spaces import Points
+from .sampler_helper import (_boundary_grid_with_n, _inside_grid_with_n, 
+                             _inside_random_with_n)
 
 
 class IntersectionDomain(Domain):
@@ -51,7 +53,8 @@ class IntersectionDomain(Domain):
 
     def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError
+            return _inside_random_with_n(self, self.domain_a, self.domain_b, 
+                                         n=n, params=params, invert=False)
         return self._sample_random_with_d(d, params)
 
     def _sample_random_with_d(self, d, params=Points.empty()):
@@ -68,9 +71,8 @@ class IntersectionDomain(Domain):
 
     def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError("""Sampling in a Intersection-Domain with given
-                                         number of points n is not implemented, 
-                                         please use a density.""")
+            return _inside_grid_with_n(self, self.domain_a, self.domain_b, 
+                                       n=n, params=params, invert=False)
         return self._sample_grid_with_d(d, params)
 
     def _sample_grid_with_d(self, d, params=Points.empty()):
@@ -131,9 +133,8 @@ class IntersectionBoundaryDomain(BoundaryDomain):
 
     def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError("""Sampling in a Intersection-Domain with given
-                                         number of points n is not implemented, 
-                                         please use a density.""")
+            return _boundary_grid_with_n(self, self.domain.domain_a, 
+                                         self.domain.domain_b, n, params)
         return self._sample_grid_with_d(d, params)
 
     def _sample_grid_with_d(self, d, params=Points.empty()):

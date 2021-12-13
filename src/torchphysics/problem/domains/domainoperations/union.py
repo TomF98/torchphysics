@@ -3,6 +3,7 @@ import torch
 
 from ..domain import Domain, BoundaryDomain
 from ...spaces import Points
+from .sampler_helper import _boundary_grid_with_n
 
 
 class UnionDomain(Domain):
@@ -191,7 +192,8 @@ class UnionBoundaryDomain(BoundaryDomain):
 
     def sample_grid(self, n=None, d=None, params=Points.empty()):
         if n:
-            raise NotImplementedError
+            return _boundary_grid_with_n(self, self.domain.domain_a, 
+                                         self.domain.domain_b, n, params)
         return self._sample_grid_with_d(d, params)
 
     def _sample_grid_with_d(self, d, params=Points.empty()):
