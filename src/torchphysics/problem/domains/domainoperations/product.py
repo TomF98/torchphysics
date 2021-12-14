@@ -182,8 +182,8 @@ class ProductDomain(Domain):
         volumes = self.domain_a.volume(params.join(b_points)).squeeze(dim=-1)
         if list(volumes.shape) == [1]:
             return n_in, b_points, params
-        filter_ = torch.max(volumes)*torch.rand_like(volumes) < volumes
-        b_points = b_points[filter_.to(device), ]
+        filter_ = torch.max(volumes)*torch.rand_like(volumes, device=device) < volumes
+        b_points = b_points[filter_, ]
         if not params.isempty:
             params = params[filter_, ]
         n_out = len(b_points)

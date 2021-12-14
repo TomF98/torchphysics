@@ -114,6 +114,7 @@ class GaussianSampler(PointSampler):
             f"""Dimension of mean: {self.mean}, does not fit the domain.""" 
 
     def _sample_points(self, params=Points.empty(), device='cpu'):
+        self._set_device_of_mean_and_std(device)
         num_of_params = max(1, len(params))
         sample_points = None
         torch_dis = torch.distributions.normal.Normal(loc=self.mean, scale=self.std)
@@ -123,7 +124,7 @@ class GaussianSampler(PointSampler):
             ith_params = params[i, ]
             repeat_params = self._repeat_params(ith_params, len(self))
             while current_num_of_points < self.n_points:
-                new_points = torch_dis.sample((self.n_points,)).to(device)
+                new_points = torch_dis.sample((self.n_points,))
                 new_points = Points(new_points, self.domain.space)
                 new_points = new_points.join(repeat_params)
                 new_points = self._check_inside_domain(new_points)
@@ -134,6 +135,10 @@ class GaussianSampler(PointSampler):
             cuted_points = self._cut_tensor_to_length_n(new_sample_points)
             sample_points = self._set_sampled_points(sample_points, cuted_points)
         return sample_points
+
+    def _set_device_of_mean_and_std(self, device):
+        self.mean = self.mean.to(device)
+        self.std = self.std.to(device)
 
     def _check_inside_domain(self, new_points):
         inside = self.domain._contains(new_points)

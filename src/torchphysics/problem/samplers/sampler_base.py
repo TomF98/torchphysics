@@ -294,10 +294,15 @@ class StaticSampler(PointSampler):
 
     def sample_points(self, params=Points.empty(), device='cpu'):
         if self.created_points:
+            self._change_device(device=device)
             return self.created_points
         points = self.sampler.sample_points(params, device=device)
         self.created_points = points
         return points
+
+    def _change_device(self, device):
+        if not device == self.created_points._t.device:
+            self.created_points._t = self.created_points._t.to(device) 
 
     def make_static(self):
         return self

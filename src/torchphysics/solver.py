@@ -56,17 +56,11 @@ class Solver(pl.LightningModule):
                 "of 1000 steps.")
             steps = 1000
         return torch.utils.data.DataLoader(torch.empty(steps))
-    
-    def on_train_end(self):
-        if self.device.type != 'cpu':
-            torch.set_default_tensor_type(torch.FloatTensor)
-    
+
     def training_step(self, batch, batch_idx):
-        if self.device.type != 'cpu':
-            torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        loss = torch.zeros(1, requires_grad=True)
+        loss = torch.zeros(1, requires_grad=True, device=self.device)
         for condition in self.train_conditions:
-            cond_loss = condition.weight * condition()
+            cond_loss = condition.weight * condition(device=self.device)
             self.log(f'train/{condition.name}', cond_loss)
             loss = loss + cond_loss
 
@@ -74,11 +68,11 @@ class Solver(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        #torch.set_default_tensor_type(torch.cuda.FloatTensor)
         loss = torch.zeros(1, device=self.device)
         for condition in self.val_conditions:
             torch.set_grad_enabled(condition.track_gradients is not False)
-            self.log(f'val/{condition.name}', condition.weight * condition())
+            self.log(f'val/{condition.name}', condition.weight * condition(device=self.device))
 
     def configure_optimizers(self):
         optimizer = self.optimizer_setting.optimizer_class(

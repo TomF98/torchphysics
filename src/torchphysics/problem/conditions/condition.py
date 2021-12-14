@@ -35,7 +35,7 @@ class Condition(torch.nn.Module):
         self.track_gradients = track_gradients
     
     @abc.abstractmethod
-    def forward(self):
+    def forward(self, device='cpu'):
         """
         The forward run performed by this condition.
 
@@ -57,8 +57,10 @@ class Condition(torch.nn.Module):
         if isinstance(sampler, StaticSampler):
             # functions can be evaluated once
             for fun in data_functions:
-                points = next(sampler)
-                data_functions[fun] = UserFunction(data_functions[fun](points))
+                points = sampler.sample_points()
+                data_fun_points = data_functions[fun](points)
+                self.register_buffer(fun, data_fun_points)
+                data_functions[fun] = UserFunction(data_fun_points)
         return data_functions
         
 
@@ -91,8 +93,8 @@ class DataCondition(Condition):
         self.iterator = iter(dataloader)
         self.norm = norm
 
-    def forward(self):
-        x, y = next(self.iterator)
+    def forward(self, device='cpu'):
+        x, y = self.iterator.sample_points(device=device)
         return self.norm(self.module(x).as_tensor, y)
 
 
@@ -147,8 +149,8 @@ class ResidualCondition(Condition):
         self.norm = norm
         self.data_functions = self._setup_data_functions(data_functions, sampler)
     
-    def forward(self):
-        x = next(self.sampler)
+    def forward(self, device='cpu'):
+        x = self.sampler.sample_points(device=device)
         x_coordinates, x = self._track_gradients(x)
 
         data = {}
@@ -221,8 +223,8 @@ class IntegralCondition(Condition):
         self.integrand_fn = UserFunction(integrand_fn)
         self.data_functions = self._setup_data_functions(data_functions, sampler)
     
-    def forward(self):
-        x = next(self.sampler)
+    def forward(self, device='cpu'):
+        x = self.sampler.sample_points(device=device)
         x_coordinates, x = self._track_gradients(x)
 
         data = {}

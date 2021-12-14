@@ -36,6 +36,6 @@ class DataSampler(PointSampler):
         super().__init__(n_points=n)
 
     def sample_points(self, params=Points.empty(), device='cpu'):
-        self.input_data._t.to(device)
-        self.output_data._t.to(device)
+        self.input_data._t = self.input_data._t.to(device)
+        self.output_data._t = self.output_data._t.to(device)
         return self.input_data, self.output_data

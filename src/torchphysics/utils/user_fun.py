@@ -239,7 +239,7 @@ class DomainUserFunction(UserFunction):
             return fun_eval[:, None]
         else:
             if isinstance(self.fun, torch.Tensor):
-                self.fun.to(device)
+                self.fun = self.fun.to(device)
                 return self.fun
             else: 
                 return torch.tensor(self.fun, device=device).float()
