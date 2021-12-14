@@ -124,6 +124,28 @@ def test_sample_random_uniform_in_cut_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 - P2
+    points = P.sample_random_uniform(n=100)
+    assert len(points) == 100
+    assert torch.all(P._contains(points))
+
+
+def test_sample_random_uniform_in_cut_with_n_and_product():
+    P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
+    I = Interval(R1('t'), 0, 1)
+    P = (P1 - P2) * I
+    points = P.sample_random_uniform(n=100)
+    assert len(points) == 100
+    assert torch.all(P._contains(points))
+
+
+def test_sampler_random_uniform_in_cut_with_n_and_nothing_cut():
+    P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0, -0.5], [-0.5, -0.2])
+    P = P1 - P2
+    points = P.sample_random_uniform(n=100)
+    assert len(points) == 100
+    assert torch.all(P._contains(points))
 
 
 def test_sample_random_uniform_in_cut_with_d():
@@ -148,6 +170,18 @@ def test_sample_grid_in_cut_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 - P2
+    points = P.sample_grid(n=100)
+    assert len(points) == 100
+    assert torch.all(P._contains(points))
+
+
+def test_sample_grid_in_cut_with_n_and_nothing_cut():
+    P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0, -0.5], [-0.5, -0.2])
+    P = P1 - P2
+    points = P.sample_grid(n=100)
+    assert len(points) == 100
+    assert torch.all(P._contains(points))
 
 
 def test_sample_grid_in_cut_with_d():
@@ -269,7 +303,29 @@ def test_sample_random_uniform_in_cut_boundary_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = (P1 - P2)
+    points = P.boundary.sample_random_uniform(n=25)
+    assert len(points) == 25
+    assert torch.all(P.boundary._contains(points))
 
+
+def test_sample_random_uniform_in_cut_boundary_with_n_and_product():
+    P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
+    I = Interval(R1('t'), 0, 1)
+    P = (P1 - P2) * I
+    points = P.boundary.sample_random_uniform(n=25)
+    assert len(points) == 25
+    assert torch.all(P.boundary._contains(points))
+
+
+def test_sample_random_in_cut_boundary_with_n_and_params():
+    P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    P2 = Circle(R2('x'), [0, 0], 0.5)
+    P = P1 - P2
+    time = Points(torch.tensor([[1.0], [0.3]]), R1('t'))
+    points = P.boundary.sample_random_uniform(n=25, params=time)
+    assert len(points) == 50
+    assert torch.all(P.boundary._contains(points))
 
 def test_sample_random_uniform_in_cut_boundary_with_d():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
@@ -291,8 +347,11 @@ def test_sample_random_uniform_in_cut_boundary_with_d_in_1D():
 
 def test_sample_grid_in_cut_boundary_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
-    P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
+    P2 = Circle(R2('x'), [0, 0], 0.5)
     P = P1 - P2
+    points = P.boundary.sample_grid(n=25)
+    assert len(points) == 25
+    assert torch.all(P.boundary._contains(points))
 
 
 def test_sample_grid_in_cut_boundary_with_d():

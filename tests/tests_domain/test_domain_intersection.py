@@ -112,7 +112,18 @@ def test_sample_random_uniform_in_intersection_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 & P2
+    points = P.sample_random_uniform(n=20)
+    assert len(points) == 20
+    assert torch.all(P._contains(points))
 
+
+def test_sample_random_uniform_in_intersection_with_n_with_params():
+    P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
+    P2 = Circle(R2('x'), [1, 1], lambda t:t+1)
+    P = P1 & P2
+    time = Points(torch.tensor([[1.0], [1.5]]), R1('t'))
+    points = P.sample_random_uniform(n=20, params=time, device='cpu')
+    assert len(points) == 40
 
 
 def test_sample_random_uniform_in_intersection_with_d():
@@ -137,6 +148,9 @@ def test_sample_grid_in_intersection_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 & P2
+    points = P.sample_grid(n=120)
+    assert len(points) == 120
+    assert torch.all(P._contains(points))
 
 
 
@@ -255,7 +269,9 @@ def test_sample_random_uniform_in_intersection_boundary_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = (P1 & P2)
-
+    points = P.boundary.sample_random_uniform(n=25)
+    assert len(points) == 25
+    assert torch.all(P.boundary._contains(points))
 
 
 def test_sample_random_uniform_in_intersection_boundary_with_d():
@@ -278,7 +294,9 @@ def test_sample_grid_in_intersection_boundary_with_n():
     P1 = Parallelogram(R2('x'), [0, 0], [1, 0], [0, 1])
     P2 = Parallelogram(R2('x'), [-0.5, -0.5], [0.5, 0], [0, 0.5])
     P = P1 & P2
-
+    points = P.boundary.sample_grid(n=50)
+    assert len(points) == 50
+    assert torch.all(P.boundary._contains(points))
 
 
 def test_sample_grid_in_intersection_boundary_with_d():
