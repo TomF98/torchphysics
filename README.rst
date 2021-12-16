@@ -42,8 +42,9 @@ Some build in features are:
 - sequentially or parallel evaluation/training of different neural networks
 - normalization layers and adaptive weights [3]_ to speed up the trainings process
 - powerful and versatile training thanks to `PyTorch Lightning`_
-   + many options for optimizers and learning rate control
-   + monitoring loss of individual conditions while training 
+  
+  - many options for optimizers and learning rate control
+  - monitoring loss of individual conditions while training 
 
 
 .. _trimesh: https://github.com/mikedh/trimesh
@@ -61,7 +62,6 @@ to have a look at the following sections:
 - Documentation_
 
 .. _`Tutorials: Understanding the structure of TorchPhysics`: does_not_exist_yet
-.. _`Examples: Different application problems with detailed explanations`: examples
 .. _Documentation: does_not_exist_yet
 
 Note
@@ -83,3 +83,5 @@ Bibliography
 .. [1] Raissi, Perdikaris und Karniadakis, “Physics-informed neuralnetworks: A deep learning framework for solving forward and inverseproblems involving nonlinear partial differential equations”, 2019.
 .. [2] E and Yu, "The Deep Ritz method: A deep learning-based numerical algorithm for solving variational problems", 2017
 .. [3] McClenny und Braga-Neto, “Self-Adaptive Physics-Informed NeuralNetworks using a Soft Attention Mechanism”, 2020
+
+.. _`Examples: Different application problems with detailed explanations`: examples
