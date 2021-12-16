@@ -6,13 +6,11 @@ TorchPhysics is a Python library of deep learning methods for solving differenti
 You can use TorchPhysics to: 
 
 - solve ordinary and partial differential equations via physics-informed neural networks [#]_ (PINN) 
-  or the Deep Ritz method
+  or the Deep Ritz method [#]_
 - train a neural network to approximate solutions for different parameters
 - solve inverse problems and interpolate external data via the above methods
 
 TorchPhysics is build upon the machine learning library PyTorch_. 
-
-.. [#] A numerical footnote
 
 .. _PyTorch: https://pytorch.org/
 
@@ -42,10 +40,10 @@ Some build in features are:
 - pre implemented fully connected neural network and easy implementation
   of additional model structures 
 - sequentially or parallel evaluation/training of different neural networks
-- normalization layers and adaptive weights to speed up the trainings process
+- normalization layers and adaptive weights [#]_ to speed up the trainings process
 - powerful and versatile training thanks to `PyTorch Lightning`_
-    - many options for optimizers and learning rate control
-    - monitoring loss of individual conditions while training 
+  - many options for optimizers and learning rate control
+  - monitoring loss of individual conditions while training 
 
 
 .. _trimesh: https://github.com/mikedh/trimesh
@@ -78,3 +76,10 @@ License
 TorchPhysics uses a Apache License, see the LICENSE_ file.
 
 .. _LICENSE: LICENSE.txt
+
+
+Bibliography
+============
+.. [#] A numerical footnote
+.. [#] A numerical footnote ritz
+.. [#] A numerical footnote weights
