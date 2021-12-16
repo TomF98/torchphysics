@@ -21,9 +21,10 @@ To learn the functionality and usage of TorchPhysics we recommend
 to have a look at the following sections:
 
  - Tutorials: Understanding the structure of TorchPhysics
- - Examples: Different application problems with detailed explanations
+ - `Examples: Different application problems with detailed explanations<examples>`_
  - Documentation
  
+.. _
 
 Note
 ====
@@ -36,4 +37,4 @@ License
 =======
 TorchPhysics uses a Apache License, see the LICENSE_ file.
 
-.. _LICENSE: .LICENSE.txt
+.. _LICENSE: LICENSE.txt
