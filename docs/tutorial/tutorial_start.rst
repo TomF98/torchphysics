@@ -10,6 +10,8 @@ important part in their own little example and in the end bring everything toget
 solve a PDE.
 
 The structure is best illustrated by the following graph:
+
 .. image:: torchphysics_structure.png
   :width: 500
+  :align: center
   :alt: Graph of the work flow in TorchPhysics
