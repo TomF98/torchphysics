@@ -12,12 +12,15 @@ You can use TorchPhysics to:
 - solve inverse problems and interpolate external data via the above methods
 
 TorchPhysics is build upon the machine learning backend PyTorch_. 
+
 .. _PyTorch: https://pytorch.org/
 
 Features of TorchPhysics
 ========================
+The Aims of this library are:
 
-A longer description of your project goes here...
+- intuitive and compact way to transfer the mathematical problem into code
+- reliable and well tested code basis 
 
 In build features are:
 
@@ -27,11 +30,11 @@ In build features are:
   and Shapely_
 - creating complexer domains with the boolean operators *Union*, *Cut* and *Intersection* 
   and higher dimensional objects over the cartesian product
-- allowing interdependence of different domains, for example to create moving domains
-  in time 
+- allowing interdependence of different domains
 - different point sampling methods for every domain:
-  *RandomUnifom, Grid, Gaussian, Latin hypercube, Adaptive* and more
-
+  *RandomUnifom, Grid, Gaussian, Latin hypercube, Adaptive* and some more for specific domains
+- many different operators to easliy define differential equations
+- sequentiell or parallel evaluation/traning of different neural networks
 
 .. _trimesh: https://github.com/mikedh/trimesh
 .. _Shapely: https://github.com/shapely/shapely
@@ -41,12 +44,13 @@ Getting Started
 To learn the functionality and usage of TorchPhysics we recommend
 to have a look at the following sections:
 
-- Tutorials: Understanding the structure of TorchPhysics
+- `Tutorials: Understanding the structure of TorchPhysics`_
 - `Examples: Different application problems with detailed explanations`_
-- Documentation
- 
-.. _`Examples: Different application problems with detailed explanations`: examples
+- Documentation_
 
+.. _`Tutorials: Understanding the structure of TorchPhysics`: does_not_exist_yet
+.. _`Examples: Different application problems with detailed explanations`: examples
+.. _Documentation: does_not_exist_yet
 
 Note
 ====
