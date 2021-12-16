@@ -6,35 +6,47 @@ TorchPhysics
 TorchPhysics is a Python library of deep learning methods for solving differential equations.
 You can use TorchPhysics to: 
 
- - solve ordinary and partial differential equations via physics-informed neural networks [PINN]_
-   or the Deep Ritz method
- - solve inverse problems and interpolate external data via the above methods
+- solve ordinary and partial differential equations via physics-informed neural networks (PINN) 
+  or the Deep Ritz method
+- train a neural network to approximate solutions for different parameters
+- solve inverse problems and interpolate external data via the above methods
 
-TorchPhysics is build upon machine learning backend PyTorch_. 
+TorchPhysics is build upon the machine learning backend PyTorch_. 
 .. _PyTorch: https://pytorch.org/
-.. [PINN] M. Raissi, P. Perdikaris and G.E. Karniadakis, "Physics-informed neural
-          networks: A deep learning framework for solving forward and inverse problems 
-          involving nonlinear partial differential equations", 2019
 
 Features of TorchPhysics
 ========================
 
 A longer description of your project goes here...
 
+In build features are:
 
-.. _pyscaffold-notes:
+- mesh free domain generation. With pre implemented domain types: 
+  *Point, Interval, Parallelogram, Circle, Triangle and Sphere*
+- loadning external created objects, thanks to a soft dependency on trimesh_  
+  and Shapely_
+- creating complexer domains with the boolean operators *Union*, *Cut* and *Intersection* 
+  and higher dimensional objects over the cartesian product
+- allowing interdependence of different domains, for example to create moving domains
+  in time 
+- different point sampling methods for every domain:
+  *RandomUnifom, Grid, Gaussian, Latin hypercube, Adaptive* and more
 
+
+.. _trimesh: https://github.com/mikedh/trimesh
+.. _Shapely: https://github.com/shapely/shapely
 
 Getting Started
 ===============
 To learn the functionality and usage of TorchPhysics we recommend
 to have a look at the following sections:
 
- - Tutorials: Understanding the structure of TorchPhysics
- - `Examples: Different application problems with detailed explanations`_
- - Documentation
+- Tutorials: Understanding the structure of TorchPhysics
+- `Examples: Different application problems with detailed explanations`_
+- Documentation
  
 .. _`Examples: Different application problems with detailed explanations`: examples
+
 
 Note
 ====
