@@ -5,7 +5,7 @@ TorchPhysics
 TorchPhysics is a Python library of deep learning methods for solving differential equations.
 You can use TorchPhysics to: 
 
-- solve ordinary and partial differential equations via physics-informed neural networks[#]_ (PINN) 
+- solve ordinary and partial differential equations via physics-informed neural networks [#]_ (PINN) 
   or the Deep Ritz method
 - train a neural network to approximate solutions for different parameters
 - solve inverse problems and interpolate external data via the above methods
@@ -30,22 +30,22 @@ To this end, TorchPhysics aims at a:
 Some build in features are:
 
 - mesh free domain generation. With pre implemented domain types: 
-  *Point, Interval, Parallelogram, Circle, Triangle and Sphere*
-- loading external created objects, thanks to a soft dependency on trimesh_  
-  and Shapely_
+  *Point, Interval, Parallelogram, Circle, Triangle and Sphere*
+- loading external created objects, thanks to a soft dependency on trimesh_  
+  and Shapely_
 - creating complex domains with the boolean operators *Union*, *Cut* and *Intersection* 
-  and higher dimensional objects over the Cartesian product
+  and higher dimensional objects over the Cartesian product
 - allowing interdependence of different domains, e.g. creating moving domains
 - different point sampling methods for every domain:
-  *RandomUniform, Grid, Gaussian, Latin hypercube, Adaptive* and some more for specific domains
-- many different operators to easily define a differential equation
+  *RandomUniform, Grid, Gaussian, Latin hypercube, Adaptive* and some more for specific domains
+- different operators to easily define a differential equation
 - pre implemented fully connected neural network and easy implementation
-  of additional model structures 
+  of additional model structures 
 - sequentially or parallel evaluation/training of different neural networks
 - normalization layers and adaptive weights to speed up the trainings process
 - powerful and versatile training thanks to `PyTorch Lightning`_
-    - many options for optimizers and learning rate control
-    - monitoring loss of individual conditions while training 
+    - many options for optimizers and learning rate control
+    - monitoring loss of individual conditions while training 
 
 
 .. _trimesh: https://github.com/mikedh/trimesh
