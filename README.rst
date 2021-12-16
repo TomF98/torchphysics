@@ -66,6 +66,11 @@ to have a look at the following sections:
 .. _Documentation: does_not_exist_yet
 
 
+Installation
+============
+
+
+
 License
 =======
 TorchPhysics uses a Apache License, see the LICENSE_ file.
