@@ -2,6 +2,7 @@
 Since Union/Cut/Intersection follow the same idea for sampling for a given number of points.
 """
 import torch
+import warnings
 
 from torchphysics.problem.spaces.points import Points
 
@@ -45,6 +46,9 @@ def _random_points_if_n_eq_1(main_domain, domain_a, domain_b, params, invert, de
 
 def _random_points_inside(main_domain, domain_a, domain_b, n, params, invert, device):
     num_of_params = max(len(params), 1)
+    warnings.warn(f"""Will sample random points in the created domain operation, with
+                     a for loop over all input parameters, in total: {num_of_params}
+                     This may slow down the training.""")
     random_points = Points.empty()
     for i in range(num_of_params):
         ith_params = params[i, :]
@@ -155,6 +159,9 @@ def _random_boundary_points_if_n_eq_1(main_domain, domain_a, domain_b, params, d
 
 def _random_points_boundary(main_domain, domain_a, domain_b, n, params, device):
     num_of_params = max(len(params), 1)
+    warnings.warn(f"""Will sample random points in the created domain operation, with
+                     a for loop over all input parameters, in total: {num_of_params}
+                     This may slow down the training.""")
     random_points = Points.empty()
     domains = [domain_a, domain_b]
     for i in range(num_of_params):
