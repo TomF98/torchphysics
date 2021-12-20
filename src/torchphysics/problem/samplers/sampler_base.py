@@ -85,13 +85,16 @@ class PointSampler:
     def is_adaptive(self):
         return isinstance(self, AdaptiveSampler)
 
-    def sample_points(self, params=Points.empty()):
+    def sample_points(self, params=Points.empty(), device='cpu'):
         """The method that creates the points.
 
         Parameters
         ----------
         params : torchphysics.spaces.Points
             Additional parameters for the domain.
+        device : str
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------
@@ -102,17 +105,17 @@ class PointSampler:
             valid point in the given (product) domain.
         """
         if self.filter_fn:
-            out = self._sample_points_with_filter(params)
+            out = self._sample_points_with_filter(params, device)
         else:
-            out = self._sample_points(params)
+            out = self._sample_points(params, device)
         return out
 
     @abc.abstractmethod
-    def _sample_points_with_filter(self, params=Points.empty()):
+    def _sample_points_with_filter(self, params=Points.empty(), device='cpu'):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _sample_points(self, params=Points.empty()):
+    def _sample_points(self, params=Points.empty(), device='cpu'):
         raise NotImplementedError
 
     def __mul__(self, other):
@@ -130,11 +133,11 @@ class PointSampler:
         assert isinstance(other, PointSampler)
         return AppendSampler(self, other)
 
-    def _sample_params_independent(self, sample_function, params):
+    def _sample_params_independent(self, sample_function, params, device):
         """If the domain is independent of the used params it is more efficent
         to sample points once and then copy them accordingly.
         """
-        points = sample_function(n=self.n_points, d=self.density)
+        points = sample_function(n=self.n_points, d=self.density, device=device)
         num_of_points = len(points)
         self.set_length(num_of_points)
         num_of_params = max(1, len(params))
@@ -142,7 +145,7 @@ class PointSampler:
         repeated_points = points.repeat(num_of_params, 1)
         return repeated_points.join(repeated_params)
 
-    def _sample_params_dependent(self, sample_function, params):
+    def _sample_params_dependent(self, sample_function, params, device):
         """If the domain is dependent on some params, we can't always sample points
         for all params at once. Therefore we need a loop to iterate over the params.
         This happens for example with denstiy sampling or grid sampling. 
@@ -150,13 +153,13 @@ class PointSampler:
         num_of_params = max(1, len(params))
         sample_points = None
         for i in range(num_of_params):
-            new_points = self._sample_for_ith_param(sample_function, params, i)
+            new_points = self._sample_for_ith_param(sample_function, params, i, device)
             sample_points = self._set_sampled_points(sample_points, new_points)
         return sample_points
 
-    def _sample_for_ith_param(self, sample_function, params, i):
+    def _sample_for_ith_param(self, sample_function, params, i, device):
         ith_params = params[i, ]
-        new_points = sample_function(self.n_points, self.density, ith_params)
+        new_points = sample_function(self.n_points, self.density, ith_params, device)
         num_of_points = len(new_points)
         repeated_params = self._repeat_params(ith_params, num_of_points)
         return new_points.join(repeated_params)
@@ -210,9 +213,9 @@ class ProductSampler(PointSampler):
             return self.length
         return len(self.sampler_a) * len(self.sampler_b)
 
-    def sample_points(self, params=Points.empty()):
-        b_points = self.sampler_b.sample_points(params)
-        a_points = self.sampler_a.sample_points(b_points.join(params))
+    def sample_points(self, params=Points.empty(), device='cpu'):
+        b_points = self.sampler_b.sample_points(params, device=device)
+        a_points = self.sampler_a.sample_points(b_points.join(params), device=device)
         self.set_length(len(a_points))
         return a_points
 
@@ -237,9 +240,9 @@ class ConcatSampler(PointSampler):
             return self.length
         return len(self.sampler_a) + len(self.sampler_b)
 
-    def sample_points(self, params=Points.empty()):
-        samples_a = self.sampler_a.sample_points(params)
-        samples_b = self.sampler_b.sample_points(params)
+    def sample_points(self, params=Points.empty(), device='cpu'):
+        samples_a = self.sampler_a.sample_points(params, device=device)
+        samples_b = self.sampler_b.sample_points(params, device=device)
         self.set_length(len(samples_a) + len(samples_b))
         return samples_a | samples_b
 
@@ -265,9 +268,9 @@ class AppendSampler(PointSampler):
             return self.length
         return len(self.sampler_a)
 
-    def sample_points(self, params=Points.empty()):
-        samples_a = self.sampler_a.sample_points(params)
-        samples_b = self.sampler_b.sample_points(params)
+    def sample_points(self, params=Points.empty(), device='cpu'):
+        samples_a = self.sampler_a.sample_points(params, device=device)
+        samples_b = self.sampler_b.sample_points(params, device=device)
         self.set_length(len(samples_a))
         return samples_a.join(samples_b)
 
@@ -298,12 +301,17 @@ class StaticSampler(PointSampler):
             return self.created_points
         return self.sample_points()
 
-    def sample_points(self, params=Points.empty(), **kwargs):
+    def sample_points(self, params=Points.empty(), device='cpu', **kwargs):
         if self.created_points:
+            self._change_device(device=device)
             return self.created_points
-        points = self.sampler.sample_points(params, **kwargs)
+        points = self.sampler.sample_points(params, device=device, **kwargs)
         self.created_points = points
         return points
+
+    def _change_device(self, device):
+        if not device == self.created_points._t.device:
+            self.created_points._t = self.created_points._t.to(device) 
 
     def make_static(self):
         return self

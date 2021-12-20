@@ -143,7 +143,7 @@ def test_sphere_grid_sampling_with_to_small_n():
 def test_sphere_append_random():
     C = Sphere(R3('x'), [0, 0, 0], 4)
     points = torch.tensor([[2.0], [0.0]])
-    new_points = C._append_random(points, 2, None)
+    new_points = C._append_random(points, 2, None, device='cpu')
     assert torch.equal(points, new_points)
 
 

@@ -9,7 +9,7 @@ import numpy as np
 from ...models import Parameter, AdaptiveWeightLayer
 from ...utils import UserFunction
 from ..spaces import Points
-from ..samplers import StaticSampler, AdaptiveRejectionSampler
+from ..samplers import StaticSampler
 
 
 class Condition(torch.nn.Module):
@@ -36,7 +36,7 @@ class Condition(torch.nn.Module):
         self.track_gradients = track_gradients
     
     @abc.abstractmethod
-    def forward(self):
+    def forward(self, device='cpu'):
         """
         The forward run performed by this condition.
 
@@ -58,8 +58,10 @@ class Condition(torch.nn.Module):
         if isinstance(sampler, StaticSampler):
             # functions can be evaluated once
             for fun in data_functions:
-                points = next(sampler)
-                data_functions[fun] = UserFunction(data_functions[fun](points))
+                points = sampler.sample_points()
+                data_fun_points = data_functions[fun](points)
+                self.register_buffer(fun, data_fun_points)
+                data_functions[fun] = UserFunction(data_fun_points)
         return data_functions
         
 
@@ -94,7 +96,7 @@ class DataCondition(Condition):
         self.norm = norm
         self.batches_per_step = batches_per_step
 
-    def forward(self, device):
+    def forward(self, device='cpu'):
         loss = torch.zeros(1, requires_grad=True)
         for i, batch in enumerate(self.iterator):
             if self.batches_per_step != -1 and i >= self.batches_per_step:
@@ -190,12 +192,13 @@ class SingleModuleCondition(Condition):
         
         self.i = 0
     
-    def forward(self):
+    def forward(self, device='cpu'):
         if self.sampler.is_adaptive:
-            x = self.sampler.sample_points(unreduced_loss = self.last_unreduced_loss)
+            x = self.sampler.sample_points(unreduced_loss = self.last_unreduced_loss,
+                                           device=device)
             self.last_unreduced_loss = None
         else:
-            x = self.sampler.sample_points()
+            x = self.sampler.sample_points(device=device)
 
         x_coordinates, x = self._track_gradients(x)
 
@@ -212,21 +215,6 @@ class SingleModuleCondition(Condition):
         
         if self.sampler.is_adaptive:
             self.last_unreduced_loss = unreduced_loss
-        
-        if isinstance(self.sampler, AdaptiveRejectionSampler):
-            if self.i % 1 == 0:
-                x_cpu = x[:,'x'].as_tensor.to('cpu', copy=True).detach()
-                fig, ax = plt.subplots()
-                ax.set_xlim(0, 30)
-                ax.set_ylim(0, 30)
-                s = ax.scatter(x_cpu[:700,0], x_cpu[:700,1])
-                               #c=self.last_unreduced_loss.to('cpu', copy=True).detach()[:1000],
-                               #cmap='jet_r',
-                               #edgecolors='b')
-                #fig.colorbar(s)
-                fig.savefig(f'{self.name}/{self.i}.jpg')
-                plt.close(fig)
-            self.i += 1
         
         return self.reduce_fn(unreduced_loss)
 

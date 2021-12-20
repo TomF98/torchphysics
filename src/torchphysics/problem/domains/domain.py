@@ -50,9 +50,8 @@ class Domain:
 
     @property
     def boundary(self):
-        """
-        The boundary domain. Is not implemented for some domains, as for
-        example boundaries of other boundaries.
+        """Returns the boundary of this domain. Does not work on
+        boundaries itself, e.g. Circle.boundary.boundary throws a error.
 
         Returns
         -------
@@ -65,7 +64,7 @@ class Domain:
         """Set the volume of the given domain.
         
         volume: callable, number
-            The volume of the domain. Can be a fucntion, if the domain is 
+            The volume of the domain. Can be a function, if the domain is 
             dependent on other variables.
 
         Notes
@@ -191,7 +190,7 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         """Greates a equdistant grid in the domain.
 
         Parameters
@@ -203,6 +202,9 @@ class Domain:
             n is not defined.
         params : torchphysics.problem.Points, optional
             Additional paramters that are maybe needed to evaluate the domain.
+        device : str
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------
@@ -212,7 +214,8 @@ class Domain:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(),
+                              device='cpu'):
         """Greates a random uniform points in the domain.
 
         Parameters
@@ -224,6 +227,9 @@ class Domain:
             n is not defined.
         params : torchphysics.problem.Points, optional
             Additional paramters that are maybe needed to evaluate the domain.
+        device : str
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------
@@ -233,7 +239,7 @@ class Domain:
         raise NotImplementedError
 
     def __call__(self, **data):
-        """Evaluates the domain a the given data.
+        """Evaluates the domain at the given data.
         """
         raise NotImplementedError
 
@@ -261,6 +267,7 @@ class Domain:
 
 class BoundaryDomain(Domain):
     """The parent class for all build in boundaries.
+    Can be used just like the main Domain class.
 
     Parameters
     ----------
@@ -281,17 +288,20 @@ class BoundaryDomain(Domain):
         return self.domain.bounding_box(params)
 
     @abc.abstractmethod
-    def normal(self, points, params=Points.empty()):
+    def normal(self, points, params=Points.empty(), device='cpu'):
         """Computes the normal vector at each point in points.
 
         Parameters
         ----------
         points : torchphysics.problem.Points
-            A list of diffrent or a single point for which the normal vector 
-            should be computed. The points must lay on the boundary of the domain.
+            Different points for which the normal vector should be computed.
+            The points should lay on the boundary of the domain, to get correct results.
             E.g in 2D: points = Points(torch.tensor([[2, 4], [9, 6], ....]), R2(...))        
         params : torchphysics.problem.Points, optional
-            Additional paramters that are maybe needed to evaluate the domain.
+            Additional parameters that are maybe needed to evaluate the domain.
+        device : str, optional
+            The device on which the points should be created.
+            Default is 'cpu'.
 
         Returns
         -------

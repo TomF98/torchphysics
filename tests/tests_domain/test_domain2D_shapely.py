@@ -152,10 +152,10 @@ def test_add_additional_points_if_some_missing_poly2D():
     T = triangulate(P.polygon)[0]
     points = torch.ones((4, 2))
     n = 4
-    points = P._check_enough_points_sampled(n, points, T)
+    points = P._check_enough_points_sampled(n, points, T, 'cpu')
     assert points.shape == (4, 2)
     n = 8
-    points = P._check_enough_points_sampled(n, points, T)
+    points = P._check_enough_points_sampled(n, points, T, 'cpu')
     assert points.shape == (8, 2)
     assert all(P._contains(points))
 

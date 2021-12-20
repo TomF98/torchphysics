@@ -217,14 +217,29 @@ class DomainUserFunction(UserFunction):
     is not constant, we also append an extra dimension to the output, so that the 
     domains can work with it correctly. 
     """
-    def evaluate_function(self, **inp):
+    def __call__(self, args={}, device='cpu'):
+        if isinstance(args, Points):
+            args = args.coordinates
+        if len(args) != 0: # set the device correctly
+            device = args[list(args.keys())[0]].device
+        # check that every necessary arg is given
+        for key in self.necessary_args:
+            assert key in args, \
+                f"The argument '{key}' is necessary in {self.__name__} but not given."
+        # if necessary, pass defaults
+        inp = {key: args[key] for key in self.args if key in args}
+        inp.update({key: self.defaults[key] for key in self.args if key not in args})
+        return self.evaluate_function(device=device, **inp)
+
+    def evaluate_function(self, device='cpu', **inp):
         if callable(self.fun):
             fun_eval = self.fun(**inp)
             if not isinstance(fun_eval, torch.Tensor):
-                fun_eval = torch.tensor(fun_eval)
+                fun_eval = torch.tensor(fun_eval, device=device)
             return fun_eval[:, None]
         else:
             if isinstance(self.fun, torch.Tensor):
+                self.fun = self.fun.to(device)
                 return self.fun
             else: 
-                return torch.tensor(self.fun).float()
+                return torch.tensor(self.fun, device=device).float()

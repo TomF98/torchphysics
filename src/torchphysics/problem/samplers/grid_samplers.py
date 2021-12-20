@@ -31,22 +31,22 @@ class GridSampler(PointSampler):
         super().__init__(n_points=n_points, density=density, filter_fn=filter_fn)
         self.domain = domain
 
-    def _sample_points(self, params=Points.empty()):
+    def _sample_points(self, params=Points.empty(), device='cpu'):
         if any(var in self.domain.necessary_variables for var in params.space.keys()):
-            return self._sample_params_dependent(self.domain.sample_grid, params)
-        return self._sample_params_independent(self.domain.sample_grid, params)
+            return self._sample_params_dependent(self.domain.sample_grid, params, device)
+        return self._sample_params_independent(self.domain.sample_grid, params, device)
 
-    def _sample_points_with_filter(self, params=Points.empty()):
+    def _sample_points_with_filter(self, params=Points.empty(), device='cpu'):
         if self.n_points:
-            sample_points = self._sample_n_points_with_filter(params)
+            sample_points = self._sample_n_points_with_filter(params, device)
         else:
             # for density sampling, just sample normally and afterwards remove all 
             # points that are not allowed
-            sample_points = self._sample_points(params)
+            sample_points = self._sample_points(params, device)
             sample_points = self._apply_filter(sample_points)
         return sample_points
 
-    def _sample_n_points_with_filter(self, params):
+    def _sample_n_points_with_filter(self, params, device):
         # The idea is to first sample normally, then see how many points are valid.
         # Then rescale the number of points to get a better grid and sample again.
         # If still some points are missing add random points.
@@ -55,21 +55,22 @@ class GridSampler(PointSampler):
         sample_points = None
         for i in range(num_of_params):
             ith_params = params[i, ]
-            new_points = self._sample_grid(ith_params, sample_function, self.n_points)
+            new_points = self._sample_grid(ith_params, sample_function,
+                                           self.n_points, device)
             new_better_points = self._resample_grid(new_points, ith_params, 
-                                                    sample_function)
+                                                    sample_function, device)
             # if to many points were sampled, delete the last ones.
             cuted_points = self._cut_tensor_to_length_n(new_better_points)
             sample_points = self._set_sampled_points(sample_points, cuted_points)
         return sample_points
 
-    def _sample_grid(self, current_params, sample_function, n):
-        new_points = sample_function(n, params=current_params)
+    def _sample_grid(self, current_params, sample_function, n, device):
+        new_points = sample_function(n, params=current_params, device=device)
         repeated_params = self._repeat_params(current_params, n)
         new_points = self._apply_filter(new_points.join(repeated_params))
         return new_points
 
-    def _resample_grid(self, new_points, current_params, sample_func):
+    def _resample_grid(self, new_points, current_params, sample_func, device):
         if len(new_points) == self.n_points:
             # the first grid is already perfect
             return new_points
@@ -81,17 +82,17 @@ class GridSampler(PointSampler):
             scaled_n = int(10*self.n_points)
         else:
             scaled_n = int(self.n_points**2/len(new_points))
-        new_points = self._sample_grid(current_params, sample_func, scaled_n)
-        final_points = self._append_random_points(new_points, current_params)
+        new_points = self._sample_grid(current_params, sample_func, scaled_n, device)
+        final_points = self._append_random_points(new_points, current_params, device)
         return final_points
 
-    def _append_random_points(self, new_points, current_params):
+    def _append_random_points(self, new_points, current_params, device):
         if len(new_points) == self.n_points:
             return new_points
         random_sampler = RandomUniformSampler(domain=self.domain,
                                               n_points=self.n_points)
         random_sampler.filter_fn = self.filter_fn
-        random_points = random_sampler.sample_points(current_params)
+        random_points = random_sampler.sample_points(current_params, device=device)
         return new_points | random_points
                             
 
@@ -120,15 +121,15 @@ class ExponentialIntervalSampler(PointSampler):
         self.domain = domain
         self.exponent = exponent
 
-    def sample_points(self, params=Points.empty()):
+    def sample_points(self, params=Points.empty(), device='cpu'):
         if any(var in self.domain.necessary_variables for var in params.space.keys()):
-            return self._sample_params_dependent(self._sample_spaced_grid, params)
-        return self._sample_params_independent(self._sample_spaced_grid, params)
+            return self._sample_params_dependent(self._sample_spaced_grid, params, device)
+        return self._sample_params_independent(self._sample_spaced_grid, params, device)
 
-    def _sample_spaced_grid(self, n=None, d=None, params=Points.empty()):
+    def _sample_spaced_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         lb = self.domain.lower_bound(params)
         ub = self.domain.upper_bound(params)
-        points = torch.linspace(0, 1, len(self)+2)[1:-1]
+        points = torch.linspace(0, 1, len(self)+2, device=device)[1:-1]
         if self.exponent > 1:
             points = points**self.exponent
         else:

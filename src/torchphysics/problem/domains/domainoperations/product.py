@@ -170,38 +170,42 @@ class ProductDomain(Domain):
                 return torch.repeat_interleave(volume, max(1, len(params)), dim=0)
             
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         raise NotImplementedError(
             """Grid sampling on a product domain is not implmented. Use a product sampler
                instead.""")
     
-    def _sample_uniform_b_points(self, n_in, params=Points.empty()):
+    def _sample_uniform_b_points(self, n_in, params=Points.empty(), device='cpu'):
         n_, params = self._repeat_params(n_in, params)
-        b_points = self.domain_b.sample_random_uniform(n=n_, params=params)
+        b_points = self.domain_b.sample_random_uniform(n=n_, params=params,
+                                                       device=device)
         volumes = self.domain_a.volume(params.join(b_points)).squeeze(dim=-1)
         if list(volumes.shape) == [1]:
             return n_in, b_points, params
-        filter_ = torch.max(volumes)*torch.rand_like(volumes) < volumes
+        filter_ = torch.max(volumes)*torch.rand_like(volumes, device=device) < volumes
         b_points = b_points[filter_, ]
         if not params.isempty:
             params = params[filter_, ]
         n_out = len(b_points)
         return n_out, b_points, params
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(),
+                              device='cpu'):
         if n is not None:
             if self._is_constant:  # we use all sampled b values
                 n_, new_params = self._repeat_params(n, params)
-                b_points = self.domain_b.sample_random_uniform(n=n_, params=new_params)
+                b_points = self.domain_b.sample_random_uniform(n=n_, params=new_params, 
+                                                               device=device)
             else:  # use ratio of uniforms to get uniform values in product domain
                 n_points, b_points, new_params = \
-                    self._sample_uniform_b_points(n, params=params)
+                    self._sample_uniform_b_points(n, params=params, device=device)
                 n_sampled = n
                 while n_points != n:
                     if n_points < n:
                         n_guess = int((n/n_points-1)*n_sampled)+1
                         n_out, add_b_points, add_params = \
-                            self._sample_uniform_b_points(n_guess, params=params)
+                            self._sample_uniform_b_points(n_guess, params=params, 
+                                                          device=device)
                         b_points = b_points | add_b_points
                         new_params = new_params | add_params
                         n_points += n_out
@@ -209,9 +213,10 @@ class ProductDomain(Domain):
                         b_points = b_points[:n, ]
                         new_params = new_params[:n, ]
                         n_points = n
-            a_points = self.domain_a.sample_random_uniform(n=1, params=new_params.join(b_points))
+            a_points = self.domain_a.sample_random_uniform(n=1, params=new_params.join(b_points), 
+                                                           device=device)
             return a_points.join(b_points)
         else:
             assert d is not None
             n = int(d*self.volume())
-            return self.sample_random_uniform(n=n, params=params)
+            return self.sample_random_uniform(n=n, params=params, device=device)

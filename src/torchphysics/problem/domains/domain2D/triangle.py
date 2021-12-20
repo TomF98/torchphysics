@@ -46,10 +46,10 @@ class Triangle(Domain):
         volume = -dir_1[:, :1] * dir_3[:, 1:] + dir_1[:, 1:] * dir_3[:, :1]
         return volume / 2.0
 
-    def _construct_triangle(self, params=Points.empty()):
-        origin = self.origin(params).reshape(-1, 2)
-        corner_1 = self.corner_1(params).reshape(-1, 2)
-        corner_2 = self.corner_2(params).reshape(-1, 2)
+    def _construct_triangle(self, params=Points.empty(), device='cpu'):
+        origin = self.origin(params, device).reshape(-1, 2)
+        corner_1 = self.corner_1(params, device).reshape(-1, 2)
+        corner_2 = self.corner_2(params, device).reshape(-1, 2)
         dir_1 = corner_1 - origin
         dir_2 = corner_2 - corner_1
         dir_3 = origin - corner_2
@@ -88,12 +88,13 @@ class Triangle(Domain):
         bary_y = torch.divide(y_dir, det)
         return bary_x, bary_y
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(),
+                              device='cpu'):
         if d:
             n = 2*self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(params)
+        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(params, device)
         num_of_params = self.len_of_params(params)
-        bary_coords = torch.rand((num_of_params, n, 2))
+        bary_coords = torch.rand((num_of_params, n, 2), device=device)
         bary_coords = self._handle_sum_greater_1(d, bary_coords)
         points_in_dir_1 = bary_coords[:, :, :1] * dir_1[:, None]
         points_in_dir_2 = -bary_coords[:, :, 1:] * dir_3[:, None]
@@ -114,22 +115,22 @@ class Triangle(Domain):
                                             bary_coords[index])
         return bary_coords
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(params)
-        bary_coords = self._compute_barycentric_grid(n, dir_1, dir_3)
+        origin, _, _, dir_1, _, dir_3 = self._construct_triangle(params, device)
+        bary_coords = self._compute_barycentric_grid(n, dir_1, dir_3, device)
         if not d: 
             # if the number of points is specified we have to be sure to sample
             # the right amount 
-            bary_coords = self._grid_has_n_points(n, bary_coords)
+            bary_coords = self._grid_has_n_points(n, bary_coords, device)
         points_in_dir_1 = bary_coords[:, :1] * dir_1
         points_in_dir_2 = -bary_coords[:, 1:] * dir_3
         points = points_in_dir_1 + points_in_dir_2
         points += origin
         return Points(points, self.space)
 
-    def _compute_barycentric_grid(self, n, dir_1, dir_2):
+    def _compute_barycentric_grid(self, n, dir_1, dir_2, device):
         # since we have a triangle, we rmove later the points with bary.-
         # coordinates bigger one. Therefore double the number of points:
         scaled_n = 2 * n
@@ -138,16 +139,16 @@ class Triangle(Domain):
         # scale the number of point w.r.t. the 'form' of the parallelogram
         n_1 = int(torch.sqrt(scaled_n*side_length_1/side_length_2))
         n_2 = int(torch.sqrt(scaled_n*side_length_2/side_length_1))
-        x = torch.linspace(0, 1, n_1+2)[1:-1] # create inner grid, so remove
-        y = torch.linspace(0, 1, n_2+2)[1:-1] # first and last value
+        x = torch.linspace(0, 1, n_1+2, device=device)[1:-1] # create inner grid, so remove
+        y = torch.linspace(0, 1, n_2+2, device=device)[1:-1] # first and last value
         bary_coords = torch.stack(torch.meshgrid((x, y))).T.reshape(-1, 2)
         index = torch.where(bary_coords.sum(axis=1) <= 1)
         return bary_coords[index]
 
-    def _grid_has_n_points(self, n, bary_coords): 
+    def _grid_has_n_points(self, n, bary_coords, device): 
         # if not enough points, add some random ones.
         if len(bary_coords) < n:
-            random_points = torch.rand((n - len(bary_coords), 2))
+            random_points = torch.rand((n - len(bary_coords), 2), device=device)
             index = torch.where(random_points.sum(axis=1) >= 1)
             random_points[index] = torch.subtract(torch.tensor([[1.0, 1.0]]), 
                                                   random_points[index])
@@ -191,16 +192,17 @@ class TriangleBoundary(BoundaryDomain):
         close_to_0 = torch.isclose(bary_coord1, torch.tensor(0.0))
         return torch.logical_and(close_to_0, between_0_1)
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), 
+                              device='cpu'):
         # general idea is the same as in the parallelogram class. 
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params)
+        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params, device)
         side_1, side_2, side_3 = self._compute_side_length(dir_1, dir_2, dir_3)
         total_length = side_1 + side_2 + side_3
         num_of_params = self.len_of_params(params)
-        points = torch.zeros((num_of_params, n, 2))
-        bound_location = torch.rand((num_of_params, n, 1)) * total_length
+        points = torch.zeros((num_of_params, n, 2), device=device)
+        bound_location = torch.rand((num_of_params, n, 1), device=device)*total_length
         self._transform_interval_to_boundary(dir_1, dir_2, dir_3, 
                                              side_1, side_2, side_3, 
                                              points, bound_location)
@@ -225,15 +227,15 @@ class TriangleBoundary(BoundaryDomain):
         points += scale * dir[:, None]
         bound_location -= side_length
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params)
+        origin, _, _, dir_1, dir_2, dir_3 = self.domain._construct_triangle(params, device)
         side_1, side_2, side_3 = self._compute_side_length(dir_1, dir_2, dir_3)
         total_length = side_1 + side_2 + side_3
         num_of_params = self.len_of_params(params)
-        points = torch.zeros((num_of_params, n, 2))
-        bound_grid = torch.linspace(0, 1, n+1)[:-1] # last point would be double
+        points = torch.zeros((num_of_params, n, 2), device=device)
+        bound_grid = torch.linspace(0, 1, n+1, device=device)[:-1] # last point would be double
         bound_grid = bound_grid.repeat(num_of_params).view(num_of_params, n, 1) 
         bound_location = bound_grid * total_length
         self._transform_interval_to_boundary(dir_1, dir_2, dir_3, 
@@ -242,11 +244,11 @@ class TriangleBoundary(BoundaryDomain):
         points += origin[:, None, :]
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def normal(self, points, params=Points.empty()):
+    def normal(self, points, params=Points.empty(), device='cpu'):
         origin, _, _, dir_1, dir_2, dir_3 = \
-            self.domain._construct_triangle(points.join(params))
+            self.domain._construct_triangle(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
-        normals = torch.zeros_like(points)
+        normals = torch.zeros_like(points, device=device)
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, -dir_3)
         normal_dir_1 = self._get_normal_direction(dir_1)
         normal_dir_2 = self._get_normal_direction(dir_2)

@@ -288,7 +288,7 @@ def test_grid_sampler_resample_grid_warning():
     ps = GridSampler(C, n_points=10, filter_fn=redudant_filter)
     with pytest.warns(UserWarning):
         points = ps._resample_grid(Points.empty(), Points.empty(),
-                                   ps.domain.sample_grid)
+                                   ps.domain.sample_grid, device='cpu')
     assert points.as_tensor.shape == (110, 2)
     assert torch.all(redudant_filter(x=points.as_tensor))
     assert all(C.__contains__(points))
@@ -297,7 +297,7 @@ def test_grid_sampler_resample_grid_warning():
 def test_grid_sampler_append_no_random_points():
     a = torch.ones((10, 1))
     ps = GridSampler(None, n_points=10)
-    assert torch.equal(ps._append_random_points(a, None), a)
+    assert torch.equal(ps._append_random_points(a, None, device='cpu'), a)
 
 
 def test_spaced_grid_sampler():

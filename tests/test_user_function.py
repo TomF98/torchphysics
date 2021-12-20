@@ -179,6 +179,6 @@ def test_call_domain_user_function_if_callable_and_output_is_not_tensor():
         out = [[x, x]]
         return out
     user_fn = DomainUserFunction(test_fn)
-    out = user_fn({'x': 2})
+    out = user_fn({'x': torch.tensor(2)})
     assert out.shape == (1, 1, 2)
     assert isinstance(out, torch.Tensor)

@@ -60,17 +60,18 @@ class Point(Domain):
             bounds.append(p + self.bounding_box_tol)
         return bounds
 
-    def sample_random_uniform(self, n=None, d=None, params=Points.empty()):
+    def sample_random_uniform(self, n=None, d=None, params=Points.empty(), device='cpu'):
         if d:
             n = self.compute_n_from_density(d, params)
-        point_params = self.point(params)
-        points = torch.ones((self.len_of_params(params), n, self.space.dim))
+        point_params = self.point(params, device=device)
+        points = torch.ones((self.len_of_params(params), n, self.space.dim),
+                            device=device)
         points *= point_params
         return Points(points.reshape(-1, self.space.dim), self.space)
 
-    def sample_grid(self, n=None, d=None, params=Points.empty()):
+    def sample_grid(self, n=None, d=None, params=Points.empty(), device='cpu'):
         # for one single point grid and random sampling is the same
-        return self.sample_random_uniform(n=n, d=d, params=params)
+        return self.sample_random_uniform(n=n, d=d, params=params, device=device)
 
     def _get_volume(self, params=Points.empty()):
         no_of_params = self.len_of_params(params)
