@@ -57,13 +57,19 @@ class Solver(pl.LightningModule):
             steps = 1000
         return torch.utils.data.DataLoader(torch.empty(steps))
     
-    def on_train_end(self):
+    def val_dataloader(self):
+        # HACK: we perform only a single step during validation,
+        return torch.utils.data.DataLoader(torch.empty(1))
+    
+    def on_fit_end(self):
         if self.device.type != 'cpu':
             torch.set_default_tensor_type(torch.FloatTensor)
     
-    def training_step(self, batch, batch_idx):
+    def on_fit_start(self):
         if self.device.type != 'cpu':
             torch.set_default_tensor_type(torch.cuda.FloatTensor)
+
+    def training_step(self, batch, batch_idx):
         loss = torch.zeros(1, requires_grad=True)
         for condition in self.train_conditions:
             cond_loss = condition.weight * condition()
@@ -72,13 +78,11 @@ class Solver(pl.LightningModule):
 
         self.log('train/loss', loss)
         return loss
-    
+
     def validation_step(self, batch, batch_idx):
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        loss = torch.zeros(1, device=self.device)
         for condition in self.val_conditions:
             torch.set_grad_enabled(condition.track_gradients is not False)
-            self.log(f'val/{condition.name}', condition.weight * condition())
+            self.log(f'val/{condition.name}', condition())
 
     def configure_optimizers(self):
         optimizer = self.optimizer_setting.optimizer_class(
@@ -90,11 +94,10 @@ class Solver(pl.LightningModule):
             return optimizer
 
         lr_scheduler = self.optimizer_setting.scheduler_class(optimizer,
-            **self.optimizer_setting.scheduler_args['args']
+            **self.optimizer_setting.scheduler_args
         )
         lr_scheduler = {'scheduler': lr_scheduler, 'name': 'learning_rate', 
                         'interval': 'step', 'frequency': 1}
         for input_name in self.optimizer_setting.scheduler_args:
-            if not input_name == 'args':
-                lr_scheduler[input_name] = self.optimizer_setting.scheduler_args[input_name]
+            lr_scheduler[input_name] = self.optimizer_setting.scheduler_args[input_name]
         return [optimizer], [lr_scheduler]

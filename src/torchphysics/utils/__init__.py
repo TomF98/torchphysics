@@ -8,6 +8,8 @@ from .differentialoperators import (laplacian,
                                     rot, 
                                     normal_derivative)
 
+from .data import PointsDataset, PointsDataLoader
+
 from .user_fun import UserFunction
 from .plotting import plot, Plotter, animate, scatter
 from .evaluation import compute_min_and_max

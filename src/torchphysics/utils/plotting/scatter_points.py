@@ -32,9 +32,19 @@ def scatter(subspace, *samplers):
     for sampler in samplers:
         points = sampler.sample_points()[:, list(subspace.keys())]
         numpy_points = points.as_tensor.detach().cpu().numpy()
-        scatter_fn(ax, numpy_points)
+        labels = _create_labels(subspace)
+        scatter_fn(ax, numpy_points, labels)
     return fig
 
+def _create_labels(subspace):
+    labels = []
+    for var in subspace:
+        if subspace[var] == 1:
+            labels.append(var)
+        else:
+            for i in range(subspace[var]):
+                labels.append(var+f'_{i+1}')
+    return labels
 
 def _choose_scatter_function(space_dim):
     fig = plt.figure()
@@ -49,13 +59,19 @@ def _choose_scatter_function(space_dim):
         return fig, ax, _scatter_3D  
 
 
-def _scatter_1D(ax, points):
+def _scatter_1D(ax, points, labels):
     ax.scatter(points, np.zeros_like(points))
+    ax.set_xlabel(labels[0])
 
 
-def _scatter_2D(ax, points):
+def _scatter_2D(ax, points, labels):
     ax.scatter(points[:, 0], points[:, 1])
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
 
 
-def _scatter_3D(ax, points):
+def _scatter_3D(ax, points, labels):
     ax.scatter(points[:, 0], points[:, 1], points[:, 2])
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
+    ax.set_zlabel(labels[2])

@@ -1,7 +1,8 @@
 from .condition import (Condition,
                         PINNCondition,
-                        ResidualCondition,
                         DataCondition,
                         DeepRitzCondition,
-                        IntegralCondition,
-                        ParameterCondition)
+                        ParameterCondition,
+                        MeanCondition,
+                        AdaptiveWeightsCondition,
+                        SingleModuleCondition)

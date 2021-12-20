@@ -150,7 +150,7 @@ class Points():
         This operation does not support slicing single dimensions from a
         variable directly, however, this can be done on the output.
         """
-        if not isinstance(val, Iterable):
+        if not isinstance(val, tuple) and not isinstance(val, list):
             val = (val,)
         # first axis
         if isinstance(val[0], int):
@@ -281,3 +281,11 @@ class Points():
     @requires_grad.setter
     def requires_grad(self, value):
         self._t.requires_grad = value
+    
+    def cuda(self, *args, **kwargs):
+        self._t = self._t.cuda(*args, **kwargs)
+        return self
+    
+    def to(self, *args, **kwargs):
+        self._t = self._t.to(*args, **kwargs)
+        return self

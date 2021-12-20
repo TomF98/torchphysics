@@ -16,7 +16,7 @@ class PointSampler:
     n_points : int, optional
         The number of points that should be sampled.
     density : float, optional
-        The desiered density of the created points.
+        The desired density of the created points.
     filter_fn : callable, optional
         A function that restricts the possible positions of sample points.
         A point that is allowed should return True, therefore a point that should be 
@@ -24,6 +24,7 @@ class PointSampler:
         of inputs.
         The Sampler will use a rejection sampling to find the right amount of points.
     """
+
     def __init__(self, n_points=None, density=None, filter_fn=None):
         self.n_points = n_points
         self.density = density
@@ -31,7 +32,7 @@ class PointSampler:
         if filter_fn:
             self.filter_fn = UserFunction(filter_fn)
         else:
-            self.filter_fn = None 
+            self.filter_fn = None
 
     def set_length(self, length):
         """If a density is used, the number of points will not be known before
@@ -80,8 +81,12 @@ class PointSampler:
     def is_static(self):
         return isinstance(self, StaticSampler)
 
+    @property
+    def is_adaptive(self):
+        return isinstance(self, AdaptiveSampler)
+
     def sample_points(self, params=Points.empty()):
-        """The methode that creates the points.
+        """The method that creates the points.
 
         Parameters
         ----------
@@ -176,10 +181,10 @@ class PointSampler:
             warnings.warn(f"""Sampling points with filter did run 10
                               iterations and until now only found 
                               {num_of_new_points} from {self.n_points} points.
-                              This may take some time.""")  
+                              This may take some time.""")
         elif iterations >= 20 and num_of_new_points == 0:
             raise RuntimeError("""Run 20 iterations and could not find a single 
-                                  valid point for the filter condition.""") 
+                                  valid point for the filter condition.""")
 
     def _cut_tensor_to_length_n(self, points):
         return points[:self.n_points, ]
@@ -194,6 +199,7 @@ class ProductSampler(PointSampler):
     sampler_a, sampler_b : PointSampler
         The two PointSamplers that should be connected.
     """
+
     def __init__(self, sampler_a, sampler_b):
         self.sampler_a = sampler_a
         self.sampler_b = sampler_b
@@ -220,6 +226,7 @@ class ConcatSampler(PointSampler):
     sampler_a, sampler_b : PointSampler
         The two PointSamplers that should be connected.
     """
+
     def __init__(self, sampler_a, sampler_b):
         self.sampler_a = sampler_a
         self.sampler_b = sampler_b
@@ -247,6 +254,7 @@ class AppendSampler(PointSampler):
         The two PointSamplers that should be connected. Both Samplers should create 
         the same number of points.
     """
+
     def __init__(self, sampler_a, sampler_b):
         self.sampler_a = sampler_a
         self.sampler_b = sampler_b
@@ -274,6 +282,7 @@ class StaticSampler(PointSampler):
     sampler : Pointsampler
         The basic sampler that will create the points.  
     """
+
     def __init__(self, sampler):
         self.length = None
         self.sampler = sampler
@@ -289,12 +298,27 @@ class StaticSampler(PointSampler):
             return self.created_points
         return self.sample_points()
 
-    def sample_points(self, params=Points.empty()):
+    def sample_points(self, params=Points.empty(), **kwargs):
         if self.created_points:
             return self.created_points
-        points = self.sampler.sample_points(params)
+        points = self.sampler.sample_points(params, **kwargs)
         self.created_points = points
         return points
 
     def make_static(self):
         return self
+
+
+class AdaptiveSampler(PointSampler):
+    """A sampler that requires a current loss for every point of the
+    last sampled set of points.
+    """
+
+    def sample_points(self, unreduced_loss, params=Points.empty()):
+        if self.filter_fn:
+            out = self._sample_points_with_filter(unreduced_loss=unreduced_loss,
+                                                  params=params)
+        else:
+            out = self._sample_points(unreduced_loss=unreduced_loss,
+                                      params=params)
+        return out

@@ -6,10 +6,11 @@ import abc
 import torch
 import numpy as np
 
-from ...models import Parameter
+from ...models import Parameter, AdaptiveWeightLayer
 from ...utils import UserFunction
 from ..spaces import Points
-from ..samplers import StaticSampler
+from ..samplers import StaticSampler, AdaptiveRejectionSampler
+
 
 class Condition(torch.nn.Module):
     """
@@ -69,7 +70,7 @@ class DataCondition(Condition):
     dataloader).
 
     Parameters
-    -------
+    ----------
     module : torchphysics.Model
         The torch module which should be fitted to data.
     dataloader : torch.utils.DataLoader
@@ -85,162 +86,28 @@ class DataCondition(Condition):
         The weight multiplied with the loss of this condition during
         training.
     """
-    def __init__(self, module, dataloader, norm, name='datacondition', weight=1.0):
+    def __init__(self, module, dataloader, norm, batches_per_step=-1, name='datacondition',
+                 weight=1.0):
         super().__init__(name=name, weight=weight, track_gradients=False)
         self.module = module
-        self.iterator = iter(dataloader)
+        self.iterator = dataloader
         self.norm = norm
+        self.batches_per_step = batches_per_step
 
-    def forward(self):
-        x, y = next(self.iterator)
-        return self.norm(self.module(x).as_tensor, y)
-
-
-class ResidualCondition(Condition):
-    """
-    A condition that minimizes the Lp-norm of the residual of a single module, like it
-    is common in the concept of Physics-Informed Neural Networks (PINNs) [1] or for
-    boundary conditions in several approaches.
-    
-    Parameters
-    -------
-    module : torchphysics.Model
-        The torch module which should be optimized.
-    sampler : torchphysics.samplers.PointSampler
-        A sampler that creates the points in the domain of the residual function,
-        could be an inner or a boundary domain.
-    residual_fn : callable
-        A user-defined function that computes the residual from inputs and outputs
-        of the model, e.g. by using utils.differentialoperators or domain.normal
-    norm : int
-        The p of the used Lp-norm
-    data_functions : dict
-        A dictionary of user-defined functions and their names (as keys). Can be
-        used e.g. for right sides in PDEs or functions in boundary conditions.
-    track_gradients : bool
-        Whether gradients w.r.t. the inputs should be tracked during training or
-        not. Defaults to true, since this is needed to compute differential operators
-        in PINNs.
-    parameter : Parameter
-        A Parameter that can be used in the residual_fn and should be learned in
-        parallel, e.g. based on data (in an additional DataCondition).
-    name : str
-        The name of this condition which will be monitored in logging.
-    weight : float
-        The weight multiplied with the loss of this condition during
-        training.
-
-    Notes
-    -----
-    ..  [1] M. Raissi, "Physics-informed neural networks: A deep learning framework for
-        solving forward and inverse problems involving nonlinear partial differential
-        equations", Journal of Computational Physics, vol. 378, pp. 686-707, 2019.
-    """
-    def __init__(self, module, sampler, residual_fn, norm=2, track_gradients=True,
-                 data_functions={}, parameter=Parameter.empty(), name='pinncondition',
-                 weight=1.0):
-        super().__init__(name=name, weight=weight, track_gradients=track_gradients)
-        self.module = module
-        self.parameter = parameter
-        self.sampler = sampler
-        self.residual_fn = UserFunction(residual_fn)
-        self.norm = norm
-        self.data_functions = self._setup_data_functions(data_functions, sampler)
-    
-    def forward(self):
-        x = next(self.sampler)
-        x_coordinates, x = self._track_gradients(x)
-
-        data = {}
-        for fun in self.data_functions:
-            data[fun] = self.data_functions[fun](x_coordinates)
-
-        y = self.module(x)  # y is in coords of output space
-        return torch.mean(torch.abs(self.residual_fn({**y.coordinates,
-                                                      **x_coordinates,
-                                                      **self.parameter.coordinates,
-                                                      **data}))**self.norm,
-                          dim=0)**(1/self.norm)
-
-
-class PINNCondition(ResidualCondition):
-    """
-    Alias for :class:`ResidualCondition`.
-    """
-
-class IntegralCondition(Condition):
-    """
-    A Condition that minimizes the integral of a user-defined integrand, could be used
-    in general variational approaches, e.g. the Deep-Ritz-Method [1].
-
-    Parameters
-    ----------
-    module : torchphysics.Model
-        The torch module which should solve the differential equation.
-    sampler : torchphysics.samplers.PointSampler
-        A sampler that creates the points in the domain of the differential equation.
-    integrand : callable
-        A user-defined function that computes the integrand of the weak formulation,
-        e.g. by using utils.differentialoperators
-    track_gradients : bool
-        Whether gradients w.r.t. the inputs should be tracked during training or
-        not. Defaults to true, since this is needed to compute differential operators
-        in Deep-Ritz-Method.
-    data_functions : dict
-        A dictionary of user-defined functions and their names (as keys). Can be
-        used e.g. for right sides in PDEs.
-    parameter : Parameter
-        A Parameter that can be used in the integrand and should be leraned in parallel,
-        e.g. based on data.
-    name : str
-        The name of this condition which will be monitored in logging.
-    weight : float
-        The weight multiplied with the loss of this condition during
-        training.
-
-    Notes
-    -----
-    ..  The implementation differs from the PINNCondition with p=1 only in avoiding the
-        computation of absolute values in the integral. The main difference of PINN and
-        DeepRitz is the definition of the integrand by the user.
-    ..  [1] Weinan E and Bing Yu, "The Deep Ritz method: A deep learning-based numerical
-        algorithm for solving variational problems", 2017
-    
-    Examples
-    --------
-    def poisson_residual(u, x):
-        return 0.5*(torch.sum(grad(u)**2), dim=1)
-    """
-    def __init__(self, module, sampler, integrand_fn, track_gradients=True,
-                 data_functions={}, parameter=Parameter.empty(), name='deepritzcondition',
-                 weight=1.0):
-        super().__init__(name=name, weight=weight, track_gradients=track_gradients)
-        self.module = module
-        self.parameter = parameter
-        self.sampler = sampler
-        self.integrand_fn = UserFunction(integrand_fn)
-        self.data_functions = self._setup_data_functions(data_functions, sampler)
-    
-    def forward(self):
-        x = next(self.sampler)
-        x_coordinates, x = self._track_gradients(x)
-
-        data = {}
-        for fun in self.data_functions:
-            data[fun] = self.data_functions[fun](x_coordinates)
-
-        y = self.module(x)
-        return torch.mean(self.integrand_fn({**y.coordinates,
-                                            **x_coordinates,
-                                            **self.parameter.coordinates,
-                                            **data}),
-                          dim=0)
-
-
-class DeepRitzCondition(IntegralCondition):
-    """
-    Alias for :class:`IntegralCondition`.
-    """
+    def forward(self, device):
+        loss = torch.zeros(1, requires_grad=True)
+        for i, batch in enumerate(self.iterator):
+            if self.batches_per_step != -1 and i >= self.batches_per_step:
+                # this is currently not correct
+                break
+            x, y = batch
+            x, y = x.to(device), y.to(device)
+            a = torch.abs(self.module(x).as_tensor-y.as_tensor)
+            if self.norm == 'inf' or torch.isinf(self.norm):
+                loss = torch.maximum(loss, torch.max(a))
+            else:
+                loss = loss + a**self.norm/len(self.iterator)
+        return loss
 
 
 class ParameterCondition(Condition):
@@ -266,3 +133,255 @@ class ParameterCondition(Condition):
     
     def forward(self):
         return self.penalty(self.parameter.coordinates)
+
+
+
+class SingleModuleCondition(Condition):
+    """
+    A condition that minimizes the reduced loss of a single module.
+
+    Parameters
+    -------
+    module : torchphysics.Model
+        The torch module which should be optimized.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the residual function,
+        could be an inner or a boundary domain.
+    residual_fn : callable
+        A user-defined function that computes the residual (unreduced loss) from
+        inputs and outputs of the model, e.g. by using utils.differentialoperators
+        and/or domain.normal
+    error_fn : callable
+        Function that will be applied to the output of the residual_fn to compute
+        the unreduced loss.
+    reduce_fn : callable
+        Function that will be applied to reduce the loss to a scalar. Defaults to
+        torch.mean
+    data_functions : dict
+        A dictionary of user-defined functions and their names (as keys). Can be
+        used e.g. for right sides in PDEs or functions in boundary conditions.
+    track_gradients : bool
+        Whether gradients w.r.t. the inputs should be tracked during training or
+        not. Defaults to true, since this is needed to compute differential operators
+        in PINNs.
+    parameter : Parameter
+        A Parameter that can be used in the residual_fn and should be learned in
+        parallel, e.g. based on data (in an additional DataCondition).
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+    """
+    def __init__(self, module, sampler, residual_fn, error_fn, reduce_fn=torch.mean,
+                 name='singlemodulecondition', track_gradients=True, data_functions={},
+                 parameter=Parameter.empty(), weight=1.0):
+        super().__init__(name=name, weight=weight, track_gradients=track_gradients)
+        self.module = module
+        self.parameter = parameter
+        self.sampler = sampler
+        self.residual_fn = UserFunction(residual_fn)
+        self.error_fn = error_fn
+        self.reduce_fn = reduce_fn
+        self.data_functions = self._setup_data_functions(data_functions, sampler)
+
+        if self.sampler.is_adaptive:
+            self.last_unreduced_loss = None
+        
+        self.i = 0
+    
+    def forward(self):
+        if self.sampler.is_adaptive:
+            x = self.sampler.sample_points(unreduced_loss = self.last_unreduced_loss)
+            self.last_unreduced_loss = None
+        else:
+            x = self.sampler.sample_points()
+
+        x_coordinates, x = self._track_gradients(x)
+
+        data = {}
+        for fun in self.data_functions:
+            data[fun] = self.data_functions[fun](x_coordinates)
+
+        y = self.module(x)
+
+        unreduced_loss = self.error_fn(self.residual_fn({**y.coordinates,
+                                                         **x_coordinates,
+                                                         **self.parameter.coordinates,
+                                                         **data}))
+        
+        if self.sampler.is_adaptive:
+            self.last_unreduced_loss = unreduced_loss
+        
+        if isinstance(self.sampler, AdaptiveRejectionSampler):
+            if self.i % 1 == 0:
+                x_cpu = x[:,'x'].as_tensor.to('cpu', copy=True).detach()
+                fig, ax = plt.subplots()
+                ax.set_xlim(0, 30)
+                ax.set_ylim(0, 30)
+                s = ax.scatter(x_cpu[:700,0], x_cpu[:700,1])
+                               #c=self.last_unreduced_loss.to('cpu', copy=True).detach()[:1000],
+                               #cmap='jet_r',
+                               #edgecolors='b')
+                #fig.colorbar(s)
+                fig.savefig(f'{self.name}/{self.i}.jpg')
+                plt.close(fig)
+            self.i += 1
+        
+        return self.reduce_fn(unreduced_loss)
+
+
+class MeanCondition(SingleModuleCondition):
+    """
+    A condition that minimizes the mean of the residual of a single module, can be
+    used e.g. in Deep Ritz Method [2] or for energy functionals, since the mean can
+    be seen as a (scaled) integral approximation.
+
+    Parameters
+    -------
+    module : torchphysics.Model
+        The torch module which should be optimized.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the residual function,
+        could be an inner or a boundary domain.
+    residual_fn : callable
+        A user-defined function that computes the residual (unreduced loss) from
+        inputs and outputs of the model, e.g. by using utils.differentialoperators
+        and/or domain.normal
+    data_functions : dict
+        A dictionary of user-defined functions and their names (as keys). Can be
+        used e.g. for right sides in PDEs or functions in boundary conditions.
+    track_gradients : bool
+        Whether gradients w.r.t. the inputs should be tracked during training or
+        not. Defaults to true, since this is needed to compute differential operators
+        in PINNs.
+    parameter : Parameter
+        A Parameter that can be used in the residual_fn and should be learned in
+        parallel, e.g. based on data (in an additional DataCondition).
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+
+    Notes
+    -----
+    ..  [1] Weinan E and Bing Yu, "The Deep Ritz method: A deep learning-based numerical
+        algorithm for solving variational problems", 2017
+    """
+    def __init__(self, module, sampler, residual_fn, track_gradients=True,
+                 data_functions={}, parameter=Parameter.empty(), name='meancondition',
+                 weight=1.0):
+        super().__init__(module, sampler, residual_fn, error_fn=torch.nn.Identity(),
+                         reduce_fn=torch.mean, name=name, track_gradients=track_gradients,
+                         data_functions=data_functions, parameter=parameter, weight=weight)
+
+class DeepRitzCondition(MeanCondition):
+    """
+    Alias for :class:`MeanCondition`.
+    """
+
+class PINNCondition(SingleModuleCondition):
+    """
+    A condition that minimizes the mean squared error of the given residual, as required in
+    the framework of physics-informed neural networks [1].
+
+    Parameters
+    -------
+    module : torchphysics.Model
+        The torch module which should be optimized.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the residual function,
+        could be an inner or a boundary domain.
+    residual_fn : callable
+        A user-defined function that computes the residual (unreduced loss) from
+        inputs and outputs of the model, e.g. by using utils.differentialoperators
+        and/or domain.normal
+    data_functions : dict
+        A dictionary of user-defined functions and their names (as keys). Can be
+        used e.g. for right sides in PDEs or functions in boundary conditions.
+    track_gradients : bool
+        Whether gradients w.r.t. the inputs should be tracked during training or
+        not. Defaults to true, since this is needed to compute differential operators
+        in PINNs.
+    parameter : Parameter
+        A Parameter that can be used in the residual_fn and should be learned in
+        parallel, e.g. based on data (in an additional DataCondition).
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+
+    Notes
+    -----
+    ..  [1] M. Raissi, "Physics-informed neural networks: A deep learning framework for
+        solving forward and inverse problems involving nonlinear partial differential
+        equations", Journal of Computational Physics, vol. 378, pp. 686-707, 2019.
+    """
+    def __init__(self, module, sampler, residual_fn, track_gradients=True,
+                 data_functions={}, parameter=Parameter.empty(), name='pinncondition',
+                 weight=1.0):
+        super().__init__(module, sampler, residual_fn, error_fn=torch.square,
+                         reduce_fn=torch.mean, name=name, track_gradients=track_gradients,
+                         data_functions=data_functions, parameter=parameter, weight=weight)
+
+
+class AdaptiveWeightsCondition(SingleModuleCondition):
+    """
+    A condition using an AdaptiveWeightLayer [1] to assign adaptive weights to all points
+    during training.
+
+    Parameters
+    -------
+    module : torchphysics.Model
+        The torch module which should be optimized.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the residual function,
+        could be an inner or a boundary domain.
+    residual_fn : callable
+        A user-defined function that computes the residual (unreduced loss) from
+        inputs and outputs of the model, e.g. by using utils.differentialoperators
+        and/or domain.normal
+    error_fn : callable
+        Function that will be applied to the output of the residual_fn to compute
+        the unreduced loss. The result will be multiplied by the adaptive weights.
+    data_functions : dict
+        A dictionary of user-defined functions and their names (as keys). Can be
+        used e.g. for right sides in PDEs or functions in boundary conditions.
+    track_gradients : bool
+        Whether gradients w.r.t. the inputs should be tracked during training or
+        not. Defaults to true, since this is needed to compute differential operators
+        in PINNs.
+    parameter : Parameter
+        A Parameter that can be used in the residual_fn and should be learned in
+        parallel, e.g. based on data (in an additional DataCondition).
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+
+    Notes
+    -----
+    ..  [1] Levi D. McClenny, "Self-Adaptive Physics-Informed Neural Networks using a
+        Soft Attention Mechanism", CoRR, 2020
+    """
+    def __init__(self, module, sampler, residual_fn, error_fn=torch.square,
+                 track_gradients=True, data_functions={}, parameter=Parameter.empty(),
+                 name='adaptive_w_condition', weight=1.0):
+
+        if not sampler.is_static:
+            raise ValueError("Adaptive point weights should only be used with static",
+                             "samplers.")
+
+        adaptive_layer = AdaptiveWeightLayer(len(self.sampler))
+        def adaptive_reduce_fun(x):
+            return torch.mean(adaptive_layer(x))
+
+        super().__init__(module, sampler, residual_fn, error_fn=error_fn,
+                         reduce_fn=adaptive_reduce_fun, name=name, track_gradients=track_gradients,
+                         data_functions=data_functions, parameter=parameter, weight=weight)
+        
+        self.adaptive_layer = adaptive_layer
+
