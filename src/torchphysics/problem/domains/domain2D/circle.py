@@ -136,6 +136,8 @@ class CircleBoundary(BoundaryDomain):
         return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         center, radius = self.domain._compute_center_and_radius(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
         normal = (points - center)

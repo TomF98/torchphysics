@@ -258,6 +258,8 @@ class ShapelyBoundary(BoundaryDomain):
         return new_point
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         points = points.as_tensor
         outline = self.domain.outline(device=device)
         index = self._where_on_boundary(points, outline)

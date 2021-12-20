@@ -293,11 +293,11 @@ class BoundaryDomain(Domain):
 
         Parameters
         ----------
-        points : torchphysics.problem.Points
+        points : torch.tensor or torchphysics.problem.Points
             Different points for which the normal vector should be computed.
             The points should lay on the boundary of the domain, to get correct results.
             E.g in 2D: points = Points(torch.tensor([[2, 4], [9, 6], ....]), R2(...))        
-        params : torchphysics.problem.Points, optional
+        params : dict or torchphysics.problem.Points, optional
             Additional parameters that are maybe needed to evaluate the domain.
         device : str, optional
             The device on which the points should be created.
@@ -310,3 +310,11 @@ class BoundaryDomain(Domain):
             normal vector at each entry from points.
         """
         raise NotImplementedError
+
+    def _transform_input_for_normals(self, points, params, device):
+        if not isinstance(points, Points):
+            points = Points(points, self.space)
+        if not isinstance(params, Points):
+            params = Points.from_coordinates(params)
+        device = points._t.device
+        return points, params, device

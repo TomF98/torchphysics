@@ -121,6 +121,8 @@ class IntervalBoundary(BoundaryDomain):
         return Points(points.reshape(-1, self.space.dim), self.space)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         close_to_left, _ = self._check_close_left_right(points, params)
         return torch.where(close_to_left, -1, 1).reshape(-1, 1)
 
@@ -161,6 +163,8 @@ class IntervalSingleBoundaryPoint(BoundaryDomain):
         return self.sample_random_uniform(n=n, d=d, params=params, device=device)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         points = torch.ones((self.len_of_params(points.join(params)), 1), device=device)
         return points * self.normal_vec
 

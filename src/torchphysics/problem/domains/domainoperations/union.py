@@ -212,6 +212,8 @@ class UnionBoundaryDomain(BoundaryDomain):
         return points_a | points_b    
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         a_normals = self.domain.domain_a.boundary.normal(points, params, device)
         b_normals = self.domain.domain_b.boundary.normal(points, params, device)
         on_a = self.domain.domain_a.boundary._contains(points, params)
