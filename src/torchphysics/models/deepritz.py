@@ -44,4 +44,4 @@ class DeepRitzNet(Model):
             x_temp = torch.relu(layer2(x_temp)**3)
             x = x_temp + x
         
-        return Points(self.linearOut(x), self.out_space)
+        return Points(self.linearOut(x), self.output_space)
