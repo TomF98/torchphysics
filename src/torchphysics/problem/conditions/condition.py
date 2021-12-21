@@ -254,7 +254,7 @@ class SingleModuleCondition(Condition):
 class MeanCondition(SingleModuleCondition):
     """
     A condition that minimizes the mean of the residual of a single module, can be
-    used e.g. in Deep Ritz Method [2] or for energy functionals, since the mean can
+    used e.g. in Deep Ritz Method [1] or for energy functionals, since the mean can
     be seen as a (scaled) integral approximation.
 
     Parameters
