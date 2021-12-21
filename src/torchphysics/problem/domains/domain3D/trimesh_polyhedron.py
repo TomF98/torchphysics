@@ -237,6 +237,8 @@ class TrimeshBoundary(BoundaryDomain):
         return Points(points, self.space)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         points = points.as_tensor
         index = self.domain.mesh.nearest.on_surface(points)[2]
         mesh_normals = torch.tensor(self.domain.mesh.face_normals, device=device)

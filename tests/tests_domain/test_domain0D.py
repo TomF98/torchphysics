@@ -2,10 +2,11 @@ import pytest
 import torch
 import numpy as np
 
-from torchphysics.problem.domains.domain import Domain
+from torchphysics.problem.domains.domain import BoundaryDomain, Domain
 from torchphysics.problem.domains.domain0D.point import Point
 from torchphysics.problem.spaces.space import R1, R2, R3
 from torchphysics.problem.spaces.points import Points
+from torchphysics.utils.user_fun import DomainUserFunction
 
 
 def p(t):
@@ -24,6 +25,29 @@ def test_create_domain():
     assert d._user_volume is None
 
 
+def test_input_transform():
+    d = Point(R1('x'), 4)
+    bound = BoundaryDomain(d)
+    points = torch.tensor([[0], [2.0]])
+    new_points, params, device = \
+        bound._transform_input_for_normals(points, Points.empty(), 0)
+    assert torch.equal(new_points.as_tensor, points)
+    assert len(params) == 0
+    assert device.type == 'cpu'
+
+
+def test_input_transform_with_params():
+    d = Point(R1('x'), 4)
+    bound = BoundaryDomain(d)
+    points = torch.tensor([[0], [2.0]])
+    params = torch.tensor([[0], [2.0]])
+    new_points, new_params, device = \
+        bound._transform_input_for_normals(points, {'x': params}, 0)
+    assert torch.equal(new_points.as_tensor, points)
+    assert torch.equal(new_params.as_tensor, params)
+    assert device.type == 'cpu'
+
+
 def test_create_point():
     P = Point(R1('x'), 4)
     assert P.dim == 0
@@ -40,7 +64,7 @@ def test_create_point_in_higher_dim():
 
 
 def test_create_point_with_variable_point():
-    P = Point(R1('x'), p)
+    P = Point(R1('x'), DomainUserFunction(p))
     assert P.dim == 0
     assert 'x' in P.space
     assert P.point.fun == p
@@ -72,6 +96,11 @@ def test_point_contains():
     inside = P._contains(points)
     assert inside[0]
     assert not any(inside[1:])
+
+
+def test_point_contains_over_in():
+    P = Point(R1('x'), 4)
+    assert Points(torch.tensor([[4.0]]), R1('x')) in P
 
 
 def test_point_contains_if_point_variable():

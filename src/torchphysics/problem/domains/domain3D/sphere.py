@@ -171,6 +171,8 @@ class SphereBoundary(BoundaryDomain):
         return Points(points, self.space)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         center, radius = self.domain._compute_center_and_radius(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
         normal = points - center

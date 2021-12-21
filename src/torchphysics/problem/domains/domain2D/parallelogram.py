@@ -228,13 +228,15 @@ class ParallelogramBoundary(BoundaryDomain):
         self._scale_points_on_side(-dir_2, side_2, points, bound_location)
 
     def normal(self, points, params=Points.empty(), device='cpu'):
+        points, params, device = \
+            self._transform_input_for_normals(points, params, device)
         origin, _, _, dir_1, dir_2 = \
             self.domain._construct_parallelogram(points.join(params), device)
         points = points[:, list(self.space.variables)].as_tensor
         normals = torch.zeros_like(points, device=device)
         bary_x, bary_y = self.domain._solve_lgs(points - origin, dir_1, dir_2)
-        normal_dir_1 = self._get_normal_direction(dir_1)
-        normal_dir_2 = -self._get_normal_direction(dir_2)
+        normal_dir_1 = self._get_normal_direction(dir_1, device)
+        normal_dir_2 = -self._get_normal_direction(dir_2, device)
         # compute for each point what the normal vector should be, by checking the
         # value of the local barycentric coordinate = 0 or 1
         self._add_local_normal_vector(normals, bary_x, bary_y, normal_dir_1,
@@ -251,9 +253,10 @@ class ParallelogramBoundary(BoundaryDomain):
         normals += normal_dir_1 * y_close_i
         normals += normal_dir_2 * x_close_i
 
-    def _get_normal_direction(self, direction):
+    def _get_normal_direction(self, direction, device):
         # to get normal vector in 2d switch x and y coordinate and multiply 
         # one coordinate with -1
-        normal = torch.index_select(direction, 1, torch.LongTensor([1, 0]))
+        normal = torch.index_select(direction, 1,
+                                    torch.tensor([1, 0], device=device))
         normal[:, :1] *= -1
         return torch.divide(normal, torch.linalg.norm(normal, dim=1).reshape(-1, 1))
