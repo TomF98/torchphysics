@@ -37,7 +37,7 @@ class DeepRitzNet(Model):
 
         self.linearOut = nn.Linear(self.width, self.output_space.dim)
 
-    def forward(self, points):
+    def forward(self, x):
         x = self.linearIn(x) # Match input dimension of network
         for (layer1,layer2) in zip(self.linear1, self.linear2):
             x_temp = torch.relu(layer1(x)**3)
