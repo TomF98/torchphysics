@@ -7,7 +7,7 @@ def _create_dummy_problem():
     fcn = tp.FCN(tp.spaces.R1('x'), tp.spaces.R1('u'))
     ps = tp.samplers.RandomUniformSampler(tp.domains.Interval(tp.spaces.R1('x'), 0, 1), 
                                           n_points=10)
-    cond = tp.conditions.ResidualCondition(fcn, ps, lambda u:u)
+    cond = tp.conditions.PINNCondition(fcn, ps, lambda u: u)
     return cond
 
 
@@ -42,7 +42,8 @@ def test_config_optimizers_with_lr_scheduler():
     cond = _create_dummy_problem()
     opi = tp.OptimizerSetting(optimizer_class=torch.optim.Adam, lr=0.1, 
                               scheduler_class=torch.optim.lr_scheduler.ExponentialLR, 
-                              scheduler_args={'args': {'gamma': 3}, 'frequency': 2})
+                              scheduler_args={'gamma': 3},
+                              scheduler_frequency=2)
     solver = tp.Solver(train_conditions=[cond], optimizer_setting=opi)
     solver_opi, scheduler = solver.configure_optimizers()
     assert isinstance(solver_opi[0], torch.optim.Adam)

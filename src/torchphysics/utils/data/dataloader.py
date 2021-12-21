@@ -28,7 +28,7 @@ class PointsDataset(torch.utils.data.Dataset):
             self.data_points = data_points
         if shuffle:
             perm = torch.randperm(len(self.data_points[0]))
-            for i in range(len(data_points)):
+            for i in range(len(self.data_points)):
                 self.data_points[i] = self.data_points[i][perm]
 
         self.batch_size = batch_size
@@ -41,7 +41,7 @@ class PointsDataset(torch.utils.data.Dataset):
             return math.ceil(len(self.data_points[0]) / self.batch_size)
 
     def __getitem__(self, idx):
-        l = len(self.input_points)
+        l = len(self.data_points[0])
         out = []
         for points in self.data_points:
             out.append(points[idx*self.batch_size:min((idx+1)*self.batch_size, l), :])

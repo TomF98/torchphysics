@@ -12,6 +12,18 @@ from ..spaces import Points
 from ..samplers import StaticSampler
 
 
+class SquaredError(torch.nn.Module):
+    """
+    Implements the sum of squared errors in space dimension.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sum(torch.square(x), dim=1)
+
+
 class Condition(torch.nn.Module):
     """
     A general condition which should be optimized or tracked.
@@ -34,7 +46,7 @@ class Condition(torch.nn.Module):
         self.name = name
         self.weight = weight
         self.track_gradients = track_gradients
-    
+
     @abc.abstractmethod
     def forward(self, device='cpu'):
         """
@@ -51,7 +63,7 @@ class Condition(torch.nn.Module):
         for var in points_coordinates:
             points_coordinates[var].requires_grad = True
         return points_coordinates, Points.from_coordinates(points_coordinates)
-    
+
     def _setup_data_functions(self, data_functions, sampler):
         for fun in data_functions:
             data_functions[fun] = UserFunction(data_functions[fun])
@@ -63,7 +75,6 @@ class Condition(torch.nn.Module):
                 self.register_buffer(fun, data_fun_points)
                 data_functions[fun] = UserFunction(data_fun_points)
         return data_functions
-        
 
 
 class DataCondition(Condition):
@@ -79,36 +90,53 @@ class DataCondition(Condition):
         A PyTorch dataloader which supplies the iterator to load data-target pairs
         from some given dataset. Data and target should be handed as points in input
         or output spaces, i.e. with the correct point object.
-    norm : torch.nn.Module
-        A torch Module which computes the (scalar) distance of the computed output
-        and the given target, e.g. torch.nn.MSELoss().
+    norm : int or 'inf'
+        The 'norm' which should be computed for evaluation. If 'inf', maximum norm will
+        be used. Else, the result will be taken to the n-th potency (without computing the
+        root!)
+    use_full_dataset : bool
+        Whether to perform single iterations or compute the error on the whole dataset during
+        forward call. The latter can especially be useful during validation.
     name : str
         The name of this condition which will be monitored in logging.
     weight : float
         The weight multiplied with the loss of this condition during
         training.
     """
-    def __init__(self, module, dataloader, norm, batches_per_step=-1, name='datacondition',
+
+    def __init__(self, module, dataloader, norm, use_full_dataset=False, name='datacondition',
                  weight=1.0):
         super().__init__(name=name, weight=weight, track_gradients=False)
         self.module = module
-        self.iterator = dataloader
+        self.dataloader = dataloader
         self.norm = norm
-        self.batches_per_step = batches_per_step
+        self.use_full_dataset = use_full_dataset
+
+    def _compute_dist(self, batch, device):
+        x, y = batch
+        x, y = x.to(device), y.to(device)
+        return torch.abs(self.module(x).as_tensor-y.as_tensor)
 
     def forward(self, device='cpu'):
-        loss = torch.zeros(1, requires_grad=True)
-        for i, batch in enumerate(self.iterator):
-            if self.batches_per_step != -1 and i >= self.batches_per_step:
-                # this is currently not correct
-                break
-            x, y = batch
-            x, y = x.to(device), y.to(device)
-            a = torch.abs(self.module(x).as_tensor-y.as_tensor)
-            if self.norm == 'inf' or torch.isinf(self.norm):
-                loss = torch.maximum(loss, torch.max(a))
+        if self.use_full_dataset:
+            loss = torch.zeros(1, requires_grad=True, device=device)
+            for batch in iter(self.dataloader):
+                a = self._compute_dist(batch, device)
+                if self.norm == 'inf':
+                    loss = torch.maximum(loss, torch.max(a))
+                else:
+                    loss = loss + torch.mean(a**self.norm)/len(self.dataloader)
+        else:
+            try:
+                batch = next(self.iterator)
+            except (StopIteration, AttributeError):
+                self.iterator = iter(self.dataloader)
+                batch = next(self.iterator)
+            a = self._compute_dist(batch, device)
+            if self.norm == 'inf':
+                loss = torch.max(a)
             else:
-                loss = loss + a**self.norm/len(self.iterator)
+                loss = torch.mean(a**self.norm)
         return loss
 
 
@@ -128,18 +156,21 @@ class ParameterCondition(Condition):
     name : str
         The name of this condition which will be monitored in logging.
     """
+
     def __init__(self, parameter, penalty, weight, name='parametercondition'):
         super().__init__(name=name, weight=weight, track_gradients=False)
         self.parameter = parameter
         self.penalty = UserFunction(penalty)
-    
-    def forward(self):
-        return self.penalty(self.parameter.coordinates)
 
+    def forward(self, device='cpu'):
+        return self.penalty(self.parameter.coordinates)
 
 
 class SingleModuleCondition(Condition):
     """
+
+    def forward(x):
+        return torch.sum(torc
     A condition that minimizes the reduced loss of a single module.
 
     Parameters
@@ -155,7 +186,7 @@ class SingleModuleCondition(Condition):
         and/or domain.normal
     error_fn : callable
         Function that will be applied to the output of the residual_fn to compute
-        the unreduced loss.
+        the unreduced loss. Should reduce only along the 2nd (i.e. space-)axis.
     reduce_fn : callable
         Function that will be applied to reduce the loss to a scalar. Defaults to
         torch.mean
@@ -175,6 +206,7 @@ class SingleModuleCondition(Condition):
         The weight multiplied with the loss of this condition during
         training.
     """
+
     def __init__(self, module, sampler, residual_fn, error_fn, reduce_fn=torch.mean,
                  name='singlemodulecondition', track_gradients=True, data_functions={},
                  parameter=Parameter.empty(), weight=1.0):
@@ -189,12 +221,12 @@ class SingleModuleCondition(Condition):
 
         if self.sampler.is_adaptive:
             self.last_unreduced_loss = None
-        
+
         self.i = 0
-    
+
     def forward(self, device='cpu'):
         if self.sampler.is_adaptive:
-            x = self.sampler.sample_points(unreduced_loss = self.last_unreduced_loss,
+            x = self.sampler.sample_points(unreduced_loss=self.last_unreduced_loss,
                                            device=device)
             self.last_unreduced_loss = None
         else:
@@ -212,10 +244,10 @@ class SingleModuleCondition(Condition):
                                                          **x_coordinates,
                                                          **self.parameter.coordinates,
                                                          **data}))
-        
+
         if self.sampler.is_adaptive:
             self.last_unreduced_loss = unreduced_loss
-        
+
         return self.reduce_fn(unreduced_loss)
 
 
@@ -257,6 +289,7 @@ class MeanCondition(SingleModuleCondition):
     ..  [1] Weinan E and Bing Yu, "The Deep Ritz method: A deep learning-based numerical
         algorithm for solving variational problems", 2017
     """
+
     def __init__(self, module, sampler, residual_fn, track_gradients=True,
                  data_functions={}, parameter=Parameter.empty(), name='meancondition',
                  weight=1.0):
@@ -264,10 +297,47 @@ class MeanCondition(SingleModuleCondition):
                          reduce_fn=torch.mean, name=name, track_gradients=track_gradients,
                          data_functions=data_functions, parameter=parameter, weight=weight)
 
+
 class DeepRitzCondition(MeanCondition):
     """
     Alias for :class:`MeanCondition`.
+
+        Parameters
+    -------
+    module : torchphysics.Model
+        The torch module which should be optimized.
+    sampler : torchphysics.samplers.PointSampler
+        A sampler that creates the points in the domain of the residual function,
+        could be an inner or a boundary domain.
+    integrand_fn : callable
+        The integrand of the weak formulation of the differential equation.
+    data_functions : dict
+        A dictionary of user-defined functions and their names (as keys). Can be
+        used e.g. for right sides in PDEs or functions in boundary conditions.
+    track_gradients : bool
+        Whether gradients w.r.t. the inputs should be tracked during training or
+        not. Defaults to true, since this is needed to compute differential operators
+        in PINNs.
+    parameter : Parameter
+        A Parameter that can be used in the residual_fn and should be learned in
+        parallel, e.g. based on data (in an additional DataCondition).
+    name : str
+        The name of this condition which will be monitored in logging.
+    weight : float
+        The weight multiplied with the loss of this condition during
+        training.
+
+    Notes
+    -----
+    ..  [1] Weinan E and Bing Yu, "The Deep Ritz method: A deep learning-based numerical
+        algorithm for solving variational problems", 2017
     """
+    def __init__(self, module, sampler, integrand_fn, track_gradients=True, data_functions={},
+                 parameter=Parameter.empty(), name='deepritzcondition', weight=1.0):
+        super().__init__(module, sampler, integrand_fn, track_gradients=track_gradients,
+                         data_functions=data_functions, parameter=parameter, name=name,
+                         weight=weight)
+
 
 class PINNCondition(SingleModuleCondition):
     """
@@ -307,10 +377,11 @@ class PINNCondition(SingleModuleCondition):
         solving forward and inverse problems involving nonlinear partial differential
         equations", Journal of Computational Physics, vol. 378, pp. 686-707, 2019.
     """
+
     def __init__(self, module, sampler, residual_fn, track_gradients=True,
                  data_functions={}, parameter=Parameter.empty(), name='pinncondition',
                  weight=1.0):
-        super().__init__(module, sampler, residual_fn, error_fn=torch.square,
+        super().__init__(module, sampler, residual_fn, error_fn=SquaredError(),
                          reduce_fn=torch.mean, name=name, track_gradients=track_gradients,
                          data_functions=data_functions, parameter=parameter, weight=weight)
 
@@ -333,7 +404,8 @@ class AdaptiveWeightsCondition(SingleModuleCondition):
         and/or domain.normal
     error_fn : callable
         Function that will be applied to the output of the residual_fn to compute
-        the unreduced loss. The result will be multiplied by the adaptive weights.
+        the unreduced loss (shape [n_points]). The result will be multiplied by the
+        adaptive weights.
     data_functions : dict
         A dictionary of user-defined functions and their names (as keys). Can be
         used e.g. for right sides in PDEs or functions in boundary conditions.
@@ -355,7 +427,8 @@ class AdaptiveWeightsCondition(SingleModuleCondition):
     ..  [1] Levi D. McClenny, "Self-Adaptive Physics-Informed Neural Networks using a
         Soft Attention Mechanism", CoRR, 2020
     """
-    def __init__(self, module, sampler, residual_fn, error_fn=torch.square,
+
+    def __init__(self, module, sampler, residual_fn, error_fn=SquaredError(),
                  track_gradients=True, data_functions={}, parameter=Parameter.empty(),
                  name='adaptive_w_condition', weight=1.0):
 
@@ -363,13 +436,13 @@ class AdaptiveWeightsCondition(SingleModuleCondition):
             raise ValueError("Adaptive point weights should only be used with static",
                              "samplers.")
 
-        adaptive_layer = AdaptiveWeightLayer(len(self.sampler))
+        adaptive_layer = AdaptiveWeightLayer(len(sampler))
+
         def adaptive_reduce_fun(x):
             return torch.mean(adaptive_layer(x))
 
         super().__init__(module, sampler, residual_fn, error_fn=error_fn,
                          reduce_fn=adaptive_reduce_fun, name=name, track_gradients=track_gradients,
                          data_functions=data_functions, parameter=parameter, weight=weight)
-        
-        self.adaptive_layer = adaptive_layer
 
+        self.adaptive_layer = adaptive_layer

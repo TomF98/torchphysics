@@ -310,8 +310,7 @@ class StaticSampler(PointSampler):
         return points
 
     def _change_device(self, device):
-        if not device == self.created_points._t.device:
-            self.created_points._t = self.created_points._t.to(device) 
+        self.created_points = self.created_points.to(device) 
 
     def make_static(self):
         return self

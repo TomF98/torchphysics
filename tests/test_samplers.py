@@ -514,31 +514,26 @@ def test_lhs_sampler_product_in_2D():
 
 # Test datasamplers:
 
-def test_create_data_sampler_with_dict():
+def test_create_data_sampler_with_dict():#
     input_data = {'x': torch.tensor([[0.0, 0.0], [1.0, 2.0]])}
-    output_data = {'u': torch.tensor([[0.0], [2.0]])}
-    ps = DataSampler(input_data, output_data)
-    i, o = ps.sample_points()
+    ps = DataSampler(input_data)
+    i = ps.sample_points()
     assert isinstance(i, Points)
-    assert isinstance(o, Points)
     assert torch.equal(input_data['x'], i.as_tensor)
-    assert torch.equal(output_data['u'], o.as_tensor)
 
 
 def test_create_data_sampler_with_points():
     input_data = Points(torch.tensor([[0.0, 0.0], [1.0, 2.0]]), R2('y'))
-    output_data = Points(torch.tensor([[0.0], [2.0]]), R1('t'))
-    ps = DataSampler(input_data, output_data)
-    i, o = ps.sample_points()
+    ps = DataSampler(input_data)
+    i  = ps.sample_points()
     assert isinstance(i, Points)
-    assert isinstance(o, Points)
+    assert i == input_data
 
 
 def test_create_data_sampler_with_wrong_data_input():
     input_data = 'wrong_input'
-    output_data = Points(torch.tensor([[0.0], [2.0]]), R1('t'))
     with pytest.raises(TypeError):
-        DataSampler(input_data, output_data)
+        DataSampler(input_data)
 
 
 def test_create_data_sampler_with_wrong_data_output():

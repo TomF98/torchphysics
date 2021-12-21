@@ -126,7 +126,7 @@ def test_points_get_item():
 def test_points_tensor_slice():
     p = Points(torch.tensor([[1, 2], [3.0, 4.0]]), R1('x')*R1('t'))
     slc = (p.as_tensor > 2)
-    assert p[slc[:,0]] == Points(torch.tensor([[2], [4.0]]), R1('x')*R1('t'))
+    assert p[slc[:,0]] == Points(torch.tensor([[3.0, 4.0]]), R1('x')*R1('t'))
     with pytest.raises(IndexError):
         p[slc]
 

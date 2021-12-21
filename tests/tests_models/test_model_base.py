@@ -5,6 +5,7 @@ from torchphysics.models import *
 from torchphysics.problem.spaces import R1, R2, Points
 from torchphysics.problem.domains import Interval, Circle
 from torchphysics.problem.samplers import RandomUniformSampler
+from torchphysics.problem.conditions.condition import SquaredError
 
 
 def test_base_model_creation():
@@ -53,21 +54,17 @@ def test_normalization_layer_forward():
 
 
 def test_create_adaptive_weight_layer():
-    out_space = R2('u')
-    model = AdaptiveWeightLayer(out_space, 10)
+    model = AdaptiveWeightLayer(10)
     assert isinstance(model, torch.nn.Module)
-    assert model.input_space == out_space
-    assert model.output_space == out_space
-    assert model.weight.shape == (10, 2)
+    assert model.weight.shape == torch.Size([10])
 
 
 def test_adaptive_weight_forward():
-    out_space = R2('u')
-    model = AdaptiveWeightLayer(out_space, 2)
-    inp_points = Points(torch.tensor([[2.0, 1.0], [1.0, 0.0]]), out_space)
+    model = AdaptiveWeightLayer(2)
+    inp_points = torch.tensor([2.0, 1.0])
     out = model(inp_points)
-    assert isinstance(out, Points)
-    assert out.as_tensor.shape == (2, 2)
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == torch.Size([2])
 
 
 def test_sequential_with_normalization():
@@ -93,14 +90,14 @@ def test_sequential_with_weights():
     fcn = FCN(input_space=in_space, output_space=out_space, 
               hidden=(10, ))
     C = Circle(in_space, [1, 0], 2.0)
-    adap_model = AdaptiveWeightLayer(out_space, 50)
-    seq = Sequential(fcn, adap_model)
+    adap_model = AdaptiveWeightLayer(50)
     ps = RandomUniformSampler(C, n_points=50)
-    out = seq(ps.sample_points())
-    assert seq.input_space == in_space
-    assert seq.output_space == out_space
-    assert isinstance(out, Points)
-    assert out.as_tensor.shape == (50, 2)
+    out = fcn(ps.sample_points())
+    assert out.space == out_space
+    sq = SquaredError()
+    out = sq(out)
+    out = adap_model(out)
+    assert out.shape == torch.Size([50])
     assert out.requires_grad
 
 

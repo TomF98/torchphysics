@@ -10,13 +10,14 @@ class OptimizerSetting:
     """
     A helper class to sum up the optimization setup in a single class.
     """
-    def __init__(self, optimizer_class, lr, optimizer_args={},
-                 scheduler_class=None, scheduler_args={}):
+    def __init__(self, optimizer_class, lr, optimizer_args={}, scheduler_class=None,
+                 scheduler_args={}, scheduler_frequency=1):
         self.optimizer_class = optimizer_class
         self.lr = lr
         self.optimizer_args = optimizer_args
         self.scheduler_class = scheduler_class
         self.scheduler_args = scheduler_args
+        self.scheduler_frequency = scheduler_frequency
 
 
 class Solver(pl.LightningModule):
@@ -89,7 +90,8 @@ class Solver(pl.LightningModule):
             **self.optimizer_setting.scheduler_args
         )
         lr_scheduler = {'scheduler': lr_scheduler, 'name': 'learning_rate', 
-                        'interval': 'step', 'frequency': 1}
+                        'interval': 'step',
+                        'frequency': self.optimizer_setting.scheduler_frequency}
         for input_name in self.optimizer_setting.scheduler_args:
             lr_scheduler[input_name] = self.optimizer_setting.scheduler_args[input_name]
         return [optimizer], [lr_scheduler]
