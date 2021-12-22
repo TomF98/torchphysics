@@ -160,6 +160,7 @@ class ParameterCondition(Condition):
     def __init__(self, parameter, penalty, weight, name='parametercondition'):
         super().__init__(name=name, weight=weight, track_gradients=False)
         self.parameter = parameter
+        self.register_parameter(name + '_params', self.parameter.as_tensor)
         self.penalty = UserFunction(penalty)
 
     def forward(self, device='cpu'):
@@ -213,6 +214,7 @@ class SingleModuleCondition(Condition):
         super().__init__(name=name, weight=weight, track_gradients=track_gradients)
         self.module = module
         self.parameter = parameter
+        self.register_parameter(name + '_params', self.parameter.as_tensor)
         self.sampler = sampler
         self.residual_fn = UserFunction(residual_fn)
         self.error_fn = error_fn
