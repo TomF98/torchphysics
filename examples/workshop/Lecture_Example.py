@@ -41,7 +41,8 @@ optim = tp.OptimizerSetting(torch.optim.Adam, lr=0.001)
 solver = tp.solver.Solver([boundary_cond, pde_cond], optimizer_setting=optim)
 
 import pytorch_lightning as pl
-trainer = pl.Trainer(gpus=1, # use one GPU 
+trainer = pl.Trainer(gpus=1, # use one GPU
+                     benchmark=True, 
                      max_steps=3000) # iteration number
 trainer.fit(solver)
 
