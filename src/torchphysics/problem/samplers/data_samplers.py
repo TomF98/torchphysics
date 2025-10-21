@@ -41,6 +41,9 @@ class DataSampler(PointSampler):
         if params.isempty:
             return self.points
 
+        repeated_params = self._repeat_params(params, len(self))
+        repeated_points = self.points.repeat(len(params))
+        return repeated_points.join(repeated_params)
         # Maybe given data has more dimensions than batch and space
         # (For example evaluation on quadrature points)
         # TODO: Make more general. What happends when parameters have higher dimension?
