@@ -6,7 +6,7 @@ from ...problem.spaces import Points
 
 class DeepONetDataLoader(torch.utils.data.DataLoader):
     """
-    A DataLoader that can be used in a condition to load minibatches of paired data
+    A DataLoader that can be used in a condition to load mini batches of paired data
     points as the input and output of a DeepONet-model.
 
     Parameters
@@ -19,7 +19,7 @@ class DeepONetDataLoader(torch.utils.data.DataLoader):
         the shape would be: [20, 100, 2]
     trunk_data : torch.tensor
         A tensor containing the input data for the trunk network. There are two different
-        possibilites for the shape of this data:
+        possibilities for the shape of this data:
             1) Every branch input function uses the same trunk values, then we can pass in
                the shape: [number_of_trunk_points, input_dim_of_trunk_net]
                This can speed up the trainings process.
@@ -207,7 +207,7 @@ class DeepONetDataset_Unique(torch.utils.data.Dataset):
         idx : int
             The index of the desired point.
         """
-        # frist slice in branch dimension (dim 0):
+        # first slice in branch dimension (dim 0):
         branch_idx = int(idx / self.branch_batch_len)
         a = (branch_idx * self.branch_batch_size) % len(self.branch_data_points)
         b = ((branch_idx + 1) * self.branch_batch_size) % len(self.branch_data_points)
@@ -298,7 +298,7 @@ class DeepONetDataset(torch.utils.data.Dataset):
     def __len__(self):
         """Returns the number of points of this dataset."""
         # the least common multiple of both possible length will lead to the correct distribution
-        # of data points and hopefully managable effort
+        # of data points and hopefully manageable effort
         return int(
             np.lcm(
                 int(
