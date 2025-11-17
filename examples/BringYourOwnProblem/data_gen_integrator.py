@@ -53,7 +53,7 @@ def make_data():
         for j in range(1, time_N):
             u_data[i, j, 0] = u_data[i, j-1, 0] + 5.0*dt*f_data[i, j, 0]
 
-    save_path = "/localdata/tomfre/DeepONet_data_integrator"
+    save_path = "/localdata/komso/datasets/DeepONet_data_integrator"
 
     torch.save(torch.tensor(time_grid.reshape(-1, 1), dtype=torch.float32), f"{save_path}/input_t.pt")
     torch.save(torch.tensor(f_data, dtype=torch.float32), f"{save_path}/input_f.pt")
