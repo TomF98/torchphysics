@@ -40,7 +40,7 @@ class FCN(Model):
         The space of the points returned by this model.
     hidden : list or tuple
         The number and size of the hidden layers of the neural network.
-        The lenght of the list/tuple will be equal to the number
+        The length of the list/tuple will be equal to the number
         of hidden layers, while the i-th entry will determine the number
         of neurons of each layer.
         E.g hidden = (10, 5) -> 2 layers, with 10 and 5 neurons.
@@ -48,7 +48,7 @@ class FCN(Model):
         The activation functions of this network. If a single function is passed
         as an input, will use this function for each layer.
         If a list is used, will use the i-th entry for i-th layer.
-        Deafult is nn.Tanh().
+        Default is nn.Tanh().
     xavier_gains : float or list, optional
         For the weight initialization a Xavier/Glorot algorithm will be used.
         The gain can be specified over this value.
@@ -104,22 +104,22 @@ class Harmonic_FCN(Model):
         The space of the points returned by this model.
     hidden : list or tuple
         The number and size of the hidden layers of the neural network.
-        The lenght of the list/tuple will be equal to the number
+        The length of the list/tuple will be equal to the number
         of hidden layers, while the i-th entry will determine the number
         of neurons of each layer.
         E.g hidden = (10, 5) -> 2 layers, with 10 and 5 neurons.
     max_frequenz : int
-        The highest frequenz that should be used in the input computation.
-        Equal to :math:`n` in the above describtion.
+        The highest frequency that should be used in the input computation.
+        Equal to :math:`n` in the above description.
     min_frequenz : int
-        The smallest frequenz that should be used. Usefull, if it is expected, that
-        only higher frequenzies appear in the solution.
+        The smallest frequency that should be used. Useful, if it is expected, that
+        only higher frequencies appear in the solution.
         Default is 0.
     activations : torch.nn or list, optional
         The activation functions of this network. If a single function is passed
         as an input, will use this function for each layer.
         If a list is used, will use the i-th entry for i-th layer.
-        Deafult is nn.Tanh().
+        Default is nn.Tanh().
     xavier_gains : float or list, optional
         For the weight initialization a Xavier/Glorot algorithm will be used.
         The gain can be specified over this value.
@@ -142,7 +142,7 @@ class Harmonic_FCN(Model):
         activations=nn.Tanh(),
         xavier_gains=5 / 3,
     ):
-        assert max_frequenz > min_frequenz, "used max frequenz has to be > min frequenz"
+        assert max_frequenz > min_frequenz, "used max frequency has to be > min frequency"
         super().__init__(input_space, output_space)
         self.max_frequenz = max_frequenz
         self.min_frequenz = min_frequenz
@@ -229,6 +229,30 @@ class Operator_FCN(Model):
 
     Parameters
     ----------
+    input_space, output_space : Space
+        The input and output space of the model.
+    in_discretization, out_discretization : int
+        The number of discretization points for the input and output. Will
+        automatically set the number of input and output neurons to this value
+        times the dimension of the spaces.
+    hidden : list or tuple
+        The number and size of the hidden layers of the neural network.
+        The length of the list/tuple will be equal to the number
+        of hidden layers, while the i-th entry will determine the number
+        of neurons of each layer.
+        E.g hidden = (10, 5) -> 2 layers, with 10 and 5 neurons.
+    activations : torch.nn or list, optional
+        The activation functions of this network. If a single function is passed
+        as an input, will use this function for each layer.
+        If a list is used, will use the i-th entry for i-th layer.
+        Default is nn.Tanh().
+    xavier_gains : float or list, optional
+        For the weight initialization a Xavier/Glorot algorithm will be used.
+        The gain can be specified over this value.
+        Default is 5/3.
+    activation_fn_output : torch.nn or None
+        An additional activation that is applied to the output of the network.
+        Default is None.
     """
 
     def __init__(
@@ -260,7 +284,8 @@ class Operator_FCN(Model):
         self.sequential = nn.Sequential(*layers)
 
     def forward(self, points):
-        points = self._fix_points_order(points).as_tensor
+        if isinstance(points, Points):
+            points = self._fix_points_order(points).as_tensor
         model_out = self.sequential(points.flatten(start_dim=-2))
         return Points(torch.unflatten(model_out, dim=-1, sizes=(self.out_dis, self.output_space.dim)), 
                       self.output_space)
