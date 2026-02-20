@@ -198,9 +198,14 @@ class FNO(Model):
 
         if isinstance(fourier_modes, int):
             fourier_modes = fourier_layers * [fourier_modes]
-        elif isinstance(fourier_modes, (list, tuple)):
-            if len(fourier_modes) < fourier_layers:
-                fourier_modes = fourier_layers * [fourier_modes] 
+        elif all(isinstance(x, int) for x in fourier_modes):
+            fourier_modes = [list(fourier_modes) for _ in range(fourier_layers)]
+        elif all(isinstance(x, (list, tuple)) for x in fourier_modes):
+            if len(fourier_modes) != fourier_layers:
+                raise ValueError(
+                    "Number of layer mode specifications must match fourier_layers"
+                )
+            fourier_modes = [list(m) for m in fourier_modes]
         else:
             raise ValueError(f"Invalid input for fourier modes")
 
