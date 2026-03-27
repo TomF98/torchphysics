@@ -1,6 +1,6 @@
-"""File contains differentialoperators
+"""File contains differential operators
 
-NOTE: We aim to make the computation of differential operaotrs more efficient
+NOTE: We aim to make the computation of differential operators more efficient
       by building an intelligent framework that is able to keep already computed
       derivatives and therefore make the computations more efficient.
 """
@@ -109,7 +109,7 @@ def grad(model_out, *derivative_variable):
 
 
 def normal_derivative(model_out, normals, *derivative_variable):
-    """Computes the normal derivativ of a network with respect to the given variable
+    """Computes the normal derivative of a network with respect to the given variable
     and normal vectors.
 
     Parameters
@@ -136,7 +136,7 @@ def normal_derivative(model_out, normals, *derivative_variable):
 
 def div(model_out, *derivative_variable):
     """Computes the divergence of a network with respect to the given variable.
-    Only for vector valued inputs, for matices use the function matrix_div.
+    Only for vector valued inputs, for matrices use the function matrix_div.
     Parameters
     ----------
     model_out : torch.tensor
@@ -168,7 +168,7 @@ def div(model_out, *derivative_variable):
 """
 def div(model_out, *derivative_variable):
     '''Computes the divergence of a network with respect to the given variable.
-    Only for vector valued inputs, for matices use the function matrix_div.
+    Only for vector valued inputs, for matrices use the function matrix_div.
 
     Parameters
     ----------
@@ -251,10 +251,10 @@ def jac(model_out, *derivative_variable):
         Du_i = []
         for vari in derivative_variable:
             Du_i.append(
-                torch.autograd.grad(model_out[:, i].sum(), vari, create_graph=True)[0]
+                torch.autograd.grad(model_out[..., i].sum(), vari, create_graph=True)[0]
             )
-        Du_rows.append(torch.cat(Du_i, dim=1))
-    Du = torch.stack(Du_rows, dim=1)
+        Du_rows.append(torch.cat(Du_i, dim=-1))
+    Du = torch.stack(Du_rows, dim=-2)
     return Du
 
 
@@ -265,7 +265,7 @@ def rot(model_out, *derivative_variable):
     Parameters
     ----------
     model_out : torch.tensor
-        The output tensor of shape (b, 3) in which respect the roation should be
+        The output tensor of shape (b, 3) in which respect the rotation should be
         computed.
     derivative_variable : torch.tensor
         The input tensor of shape (b, 3) in which respect the rotation should be
@@ -284,10 +284,10 @@ def rot(model_out, *derivative_variable):
         ""
     """
     jacobian = jac(model_out, *derivative_variable)
-    rotation = torch.zeros((len(derivative_variable[0]), 3))
-    rotation[:, 0] = jacobian[:, 2, 1] - jacobian[:, 1, 2]
-    rotation[:, 1] = jacobian[:, 0, 2] - jacobian[:, 2, 0]
-    rotation[:, 2] = jacobian[:, 1, 0] - jacobian[:, 0, 1]
+    rotation = torch.zeros((*(jacobian.shape[:-2]), 3))
+    rotation[..., 0] = jacobian[..., 2, 1] - jacobian[..., 1, 2]
+    rotation[..., 1] = jacobian[..., 0, 2] - jacobian[..., 2, 0]
+    rotation[..., 2] = jacobian[..., 1, 0] - jacobian[..., 0, 1]
     return rotation
 
 
@@ -359,7 +359,7 @@ def sym_grad(model_out, *derivative_variable):
         symmetric gradient.
     """
     jac_matrix = jac(model_out, *derivative_variable)
-    return 0.5 * (jac_matrix + torch.transpose(jac_matrix, 1, 2))
+    return 0.5 * (jac_matrix + torch.transpose(jac_matrix, -2, -1))
 
 
 def matrix_div(model_out, *derivative_variable):
@@ -368,7 +368,7 @@ def matrix_div(model_out, *derivative_variable):
     Parameters
     ----------
     model_out : torch.tensor
-        The (batch) of matirces that should be differentiated.
+        The (batch) of matrices that should be differentiated.
     derivative_variable : torch.tensor
         The spatial variable in which respect should be differentiated.
 
@@ -376,7 +376,7 @@ def matrix_div(model_out, *derivative_variable):
     ----------
     torch.tensor
         A Tensor of vectors of the form (batch, dim), containing the
-        divegrence of the input.
+        divergence of the input.
     """
     div_out = torch.zeros((len(model_out), model_out.shape[1]), device=model_out.device)
     for i in range(model_out.shape[1]):

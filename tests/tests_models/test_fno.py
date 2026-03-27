@@ -8,13 +8,13 @@ from torchphysics.problem.spaces import Points, R1, R2
 def test_create_fourier_layer():
     fourier_layer = _FourierLayer(4, 4)
     assert fourier_layer.data_dim == 1
-    assert fourier_layer.fourier_kernel.shape == (4, 4)
+    assert fourier_layer.fourier_kernel.shape == (3, 4, 4)
 
 
 def test_create_fourier_layer_higher_dim():
     fourier_layer = _FourierLayer(8, (4, 6))
     assert fourier_layer.data_dim == 2
-    assert fourier_layer.fourier_kernel.shape == (4, 6, 8)
+    assert fourier_layer.fourier_kernel.shape == (4, 4, 8, 8)
 
 
 def test_create_fourier_layer_with_linear_transform():
@@ -70,7 +70,8 @@ def test_create_fno_optional():
               bias=[False, False],
               channel_up_sample_network=in_network,
               channel_down_sample_network=out_network,
-              activations=torch.nn.Tanh())
+              activations=torch.nn.Tanh(), 
+              positional_embedding=False)
     assert fno.channel_up_sampling == in_network
     assert fno.channel_down_sampling == out_network
 
